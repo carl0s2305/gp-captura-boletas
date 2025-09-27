@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Win32;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -16,7 +17,12 @@ namespace gp_captura_boletas
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new Form1());
+            // App cerrando normal
+            Application.ApplicationExit += (_, __) => SesionApp.CerrarSesion();
+
+            // Cierre de sesión/apagado de Windows
+            SystemEvents.SessionEnding += (_, __) => SesionApp.CerrarSesion();
+            Application.Run(new FormLogin());
         }
     }
 }
