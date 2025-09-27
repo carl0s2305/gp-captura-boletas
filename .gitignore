@@ -1,0 +1,18 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.sln.docstates
+
+# Build
+bin/
+obj/
+[Bb]uild/
+
+# NuGet
+packages/
+*.nupkg
+.nuget/
+
+# Otros
+*.log
