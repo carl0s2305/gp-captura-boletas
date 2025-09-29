@@ -1,6 +1,6 @@
 ﻿namespace gp_captura_boletas
 {
-    partial class Form1
+    partial class FormGeneral
     {
         /// <summary>
         /// Variable del diseñador necesaria.
@@ -28,34 +28,20 @@
         /// </summary>
         private void InitializeComponent()
         {
-            this.btnProbarConexion = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
-            // btnProbarConexion
-            // 
-            this.btnProbarConexion.Location = new System.Drawing.Point(234, 149);
-            this.btnProbarConexion.Name = "btnProbarConexion";
-            this.btnProbarConexion.Size = new System.Drawing.Size(193, 23);
-            this.btnProbarConexion.TabIndex = 0;
-            this.btnProbarConexion.Text = "Probar conexión";
-            this.btnProbarConexion.UseVisualStyleBackColor = true;
-            this.btnProbarConexion.Click += new System.EventHandler(this.btnProbarConexion_Click);
-            // 
-            // Form1
+            // FormGeneral
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(815, 431);
-            this.Controls.Add(this.btnProbarConexion);
-            this.Name = "Form1";
+            this.Name = "FormGeneral";
             this.Text = "Form1";
             this.ResumeLayout(false);
 
         }
 
         #endregion
-
-        private System.Windows.Forms.Button btnProbarConexion;
     }
 }
 
