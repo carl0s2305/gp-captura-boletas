@@ -45,11 +45,18 @@ namespace gp_captura_boletas
         private TextBox tbUser, tbPass;
         private Button btnEye, btnEnter;
 
+        // Control de intentos
+        private const int MaxIntentos = 3;
+        private int intentosRestantes = MaxIntentos;
+        private string usuarioIntentoActual = null;
+
         // Filas (paneles) para inputs; las necesitamos para hacer span al cambiar columnas
         private Panel rowUser, rowPass;
 
         public FormLogin()
         {
+            
+
             // Ventana
             Text = "Iniciar sesión";
             StartPosition = FormStartPosition.CenterScreen;
@@ -169,10 +176,17 @@ namespace gp_captura_boletas
             // Tab order
             tbUser.TabIndex = 0;
             tbPass.TabIndex = 1;
-            btnEnter.TabIndex = 2;
+            btnEnter.TabIndex = 10;
 
             btnEnter.Click += BtnEnter_Click;  // enlazar el handler
             this.AcceptButton = btnEnter;       // Enter del teclado ejecuta click
+
+            tbUser.TextChanged += (_, __) =>
+            {
+                usuarioIntentoActual = tbUser.Text.Trim();
+                intentosRestantes = MaxIntentos;
+                btnEnter.Enabled = true;
+            };
         }
 
 
@@ -245,15 +259,15 @@ namespace gp_captura_boletas
 
 
 
-        private void UpdateTypography(int cardWidth)
+        private void UpdateTypography(int cardWidth)    
         {
             // título con escalado suave (18–24pt)
             float headingSize = Clamp(cardWidth / 28f, 18f, 24f);
             if (Math.Abs(heading.Font.Size - headingSize) > 0.5f)
-                heading.Font = new Font("Berlin Sans FB", headingSize, GraphicsUnit.Point);
+                heading.Font = new Font("Aptos", headingSize, GraphicsUnit.Point);
 
             // inputs compactos y legibles
-            var inputFont = new Font("Berlin Sans FB", 12f, GraphicsUnit.Point);   // 12pt
+            var inputFont = new Font("Aptos", 12f, GraphicsUnit.Point);   // 12pt
             tbUser.Font = inputFont;
             tbPass.Font = inputFont;
 
@@ -346,6 +360,44 @@ namespace gp_captura_boletas
                 return;
             }
 
+            // Si cambia el usuario, resetea contador
+            if (!string.Equals(usuarioIntentoActual, usuario, StringComparison.OrdinalIgnoreCase))
+            {
+                usuarioIntentoActual = usuario;
+                intentosRestantes = MaxIntentos;
+                btnEnter.Enabled = true;
+            }
+
+            bool existe;
+            try
+            {
+                existe = SesionApp.UsuarioExiste(usuario);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            if (!existe)
+            {
+                MessageBox.Show("El usuario no existe.", "Acceso denegado",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                // No descontamos intentos si el usuario ni existe
+                tbUser.Focus();
+                tbUser.SelectAll();
+                return;
+            }
+
+            // Existe: aplica política de 3 intentos
+            if (intentosRestantes <= 0)
+            {
+                MessageBox.Show("Has superado el máximo de 3 intentos. Intenta más tarde o contacta al administrador.",
+                    "Bloqueado", MessageBoxButtons.OK, MessageBoxIcon.Stop);
+                btnEnter.Enabled = false;
+                return;
+            }
+
             bool ok;
             try
             {
@@ -361,13 +413,32 @@ namespace gp_captura_boletas
             if (ok)
             {
                 var frm = new FormGeneral();
+
+                frm.FormClosed += (_, __) =>
+                {
+                    this.Show();
+                    ResetLoginForm();
+                    try { SesionApp.CerrarSesion(); } catch { }
+                };
+
                 frm.Show();
                 Hide();
             }
             else
             {
-                MessageBox.Show("Usuario o contraseña inválidos.",
-                    "Acceso denegado", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                intentosRestantes--;
+                var msg = (intentosRestantes > 0)
+                    ? $"Contraseña incorrecta. Intentos restantes: {intentosRestantes}."
+                    : "Contraseña incorrecta. Has agotado los 3 intentos.";
+                MessageBox.Show(msg, "Acceso denegado", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
+                if (intentosRestantes <= 0)
+                    btnEnter.Enabled = false;
+
+                tbPass.Clear();
+                tbPass.UseSystemPasswordChar = true;
+                btnEye.Text = "👁";
+                tbPass.Focus();
             }
         }
 
@@ -393,9 +464,6 @@ namespace gp_captura_boletas
             BackColor = Color.White,
             TextAlign = HorizontalAlignment.Center // <-- centrado horizontal
         };
-
-
-
         private Panel WrapInput(TextBox tb)
         {
             var row = new Panel { Height = InputH + 8, Dock = DockStyle.Top, Margin = new Padding(0, 4, 0, 8) };
@@ -473,5 +541,17 @@ namespace gp_captura_boletas
             else
                 tb.HandleCreated += (s, e) => SendMessage(tb.Handle, EM_SETCUEBANNER, (IntPtr)1, placeholder);
         }
+        private void ResetLoginForm()
+        {
+            tbUser.Clear();
+            tbPass.Clear();
+            tbPass.UseSystemPasswordChar = true;
+            btnEye.Text = "👁";
+            intentosRestantes = MaxIntentos;
+            usuarioIntentoActual = null;
+            btnEnter.Enabled = true;
+            tbUser.Focus();
+        }
+
     }
 }

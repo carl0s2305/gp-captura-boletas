@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace gp_captura_boletas
@@ -9,28 +11,28 @@ namespace gp_captura_boletas
     {
         // ===== Paleta =====
         private static readonly Color C_BG = Color.FromArgb(244, 247, 247);  // #F4F7F7
-        private static readonly Color C_MID = Color.FromArgb(170, 207, 208);  // #AACFD0
         private static readonly Color C_ACCENT = Color.FromArgb(121, 168, 169);  // #79A8A9
-        private static readonly Color C_PRIMARY = Color.FromArgb(31, 78, 95);   // #1F4E5F
-        private static readonly Color C_TXT_DARK = Color.FromArgb(20, 30, 40);
+        private static readonly Color C_PRIMARY = Color.FromArgb(31, 78, 95);     // #1F4E5F
         private static readonly Color C_TXT_DIM = Color.FromArgb(70, 84, 94);
 
-        // ===== Tipografía (con fallback si no está instalada) =====
         private static Font MakeFont(float size, FontStyle style = FontStyle.Regular)
         {
             try { return new Font("Aptos", size, style, GraphicsUnit.Point); }
             catch { return new Font("Segoe UI", size, style, GraphicsUnit.Point); }
         }
 
-        // ===== Contenedores =====
-        private Panel header;     // barra superior
-        private Panel sidebar;    // columna de módulos
-        private Panel content;    // área de trabajo
+        // ===== Layout raíz =====
+        private Panel header;   // barra superior
+        private Panel canvas;   // aquí pondremos los tiles
 
-        // ===== Cabecera: controles =====
+        // ===== Cabecera =====
         private Label lblTitle;
         private Label lblUser;
         private Button btnLogout;
+
+        // ===== Config. rol =====
+        private enum Rol { Director, Secretaria }
+        private Rol RolActual => ObtenerRol();  // Lee de tu sesión
 
         public FormGeneral()
         {
@@ -42,7 +44,7 @@ namespace gp_captura_boletas
             DoubleBuffered = true;
             AutoScaleMode = AutoScaleMode.Dpi;
 
-            // Layout raíz
+            // Layout raíz (Header + Canvas)
             var root = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
@@ -50,15 +52,14 @@ namespace gp_captura_boletas
                 ColumnCount = 1,
                 RowCount = 2,
             };
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72)); // header fijo
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // resto
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             Controls.Add(root);
 
-            // ====== Header ======
+            // ===== Header =====
             header = new Panel { Dock = DockStyle.Fill, BackColor = C_PRIMARY };
             root.Controls.Add(header, 0, 0);
 
-            // Título a la izquierda
             lblTitle = new Label
             {
                 Text = "SISTEMA DE CONTROL DE CALIFICACIONES",
@@ -67,11 +68,11 @@ namespace gp_captura_boletas
                 Width = 560,
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = Color.White,
-                Padding = new Padding(24, 0, 0, 0)
+                Padding = new Padding(24, 0, 0, 0),
+                Font = MakeFont(12f, FontStyle.Bold)
             };
             header.Controls.Add(lblTitle);
 
-            // Panel derecho (usuario + botón)
             var right = new FlowLayoutPanel
             {
                 Dock = DockStyle.Right,
@@ -83,19 +84,17 @@ namespace gp_captura_boletas
             };
             header.Controls.Add(right);
 
-            // Etiqueta usuario/rol
             lblUser = new Label
             {
                 AutoSize = true,
                 ForeColor = Color.White,
                 Font = MakeFont(11f),
-                Text = BuildUserText(),   // "👤 Hola, Nombre (Rol)"
+                Text = $"👤 {ObtenerNombre()} ({RolActual})",
                 TextAlign = ContentAlignment.MiddleLeft,
                 Margin = new Padding(0, 8, 12, 0)
             };
             right.Controls.Add(lblUser);
 
-            // Botón Cerrar sesión
             btnLogout = new Button
             {
                 Text = "Cerrar Sesión",
@@ -105,205 +104,239 @@ namespace gp_captura_boletas
                 ForeColor = C_PRIMARY,
                 BackColor = Color.White,
                 Padding = new Padding(12, 6, 12, 6),
-                TabStop = false
+                TabStop = false,
+                Cursor = Cursors.Hand
             };
             btnLogout.FlatAppearance.BorderSize = 0;
-            btnLogout.Cursor = Cursors.Hand;
-            btnLogout.Click += BtnLogout_Click;
             btnLogout.Resize += (_, __) => SetRounded(btnLogout, 16);
+            btnLogout.Click += BtnLogout_Click;
             SetRounded(btnLogout, 16);
             right.Controls.Add(btnLogout);
 
-            // ====== Cuerpo (sidebar + contenido) ======
-            var body = new TableLayoutPanel
+            // ===== Canvas (solo grid de botones) =====
+            canvas = new Panel
             {
                 Dock = DockStyle.Fill,
                 BackColor = C_BG,
-                ColumnCount = 2,
+                Padding = new Padding(24)
             };
-            body.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 280));
-            body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            root.Controls.Add(body, 0, 1);
+            root.Controls.Add(canvas, 0, 1);
 
-            // Sidebar (módulos)
-            sidebar = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = C_BG,
-                Padding = new Padding(16, 18, 8, 18)
-            };
-            body.Controls.Add(sidebar, 0, 0);
-
-            // Contenido
-            content = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = C_BG,
-                Padding = new Padding(8, 18, 18, 18)
-            };
-            body.Controls.Add(content, 1, 0);
-
-            BuildSidebar();        // crea grupos y botones
-            BuildWelcomeCard();    // tarjeta placeholder al centro
+            // Pinta el grid según el rol actual
+            ConstruirTilesSegunRol();
+            // Si cambias de usuario en caliente, llama de nuevo a ConstruirTilesSegunRol()
         }
 
-        // ===================== CABECERA =====================
-        private string BuildUserText()
+        // ==================== Rol y usuario (ajusta a tu sesión real) ====================
+        private Rol ObtenerRol()
         {
-            // Toma lo que tengas disponible de tu sesión.
-            // Ajusta los nombres de propiedades según tu implementación real.
-            string nombre = "Usuario";
-            string rol = "Rol";
-
             try
             {
-                // Ejemplos (cámbialos por tus propiedades reales)
-                // nombre = SesionApp?.UsuarioNombre ?? nombre;
-                // rol    = SesionApp?.UsuarioRol ?? rol;
+                if (!string.IsNullOrEmpty(SesionApp.Rol))
+                {
+                    return SesionApp.Rol.Equals("DIRECTOR", StringComparison.OrdinalIgnoreCase)
+                        ? Rol.Director
+                        : Rol.Secretaria;
+                }
             }
-            catch { /* ignore */ }
-
-            return $"👤 Hola, {nombre} ({rol})";
+            catch { }
+            return Rol.Secretaria; // fallback
         }
 
-        private void BtnLogout_Click(object sender, EventArgs e)
+        private string ObtenerNombre()
         {
-            // Lógica de cierre de sesión + volver a login
-            try { SesionApp.CerrarSesion(); } catch { /* opcional */ }
-            foreach (Form f in Application.OpenForms)
+            try
             {
-                if (f != this && f is FormLogin) { f.Show(); Close(); return; }
+                return !string.IsNullOrEmpty(SesionApp.Nombre)
+                    ? SesionApp.Nombre
+                    : SesionApp.Usuario ?? "Usuario";
             }
-            // Si no hay login abierto, crea uno
-            var login = new FormLogin();
-            login.Show();
-            Close();
+            catch { }
+            return "Usuario";
         }
 
-        // ===================== SIDEBAR =====================
-        private void BuildSidebar()
-        {
-            sidebar.Controls.Add(MakeGroupLabel("Módulos Principales"));
-            sidebar.Controls.Add(MakeModuleButton("Inscripción de Alumnos", "🧑‍🎓", OnInscripcion));
-            sidebar.Controls.Add(MakeModuleButton("Captura de Calificaciones", "📝", OnCaptura));
-            sidebar.Controls.Add(MakeModuleButton("Lista por Grupo", "📋", OnListaGrupo));
-            sidebar.Controls.Add(MakeModuleButton("Estadísticas", "📊", OnEstadisticas));
 
-            sidebar.Controls.Add(new Panel { Height = 8, Dock = DockStyle.Top });
-
-            sidebar.Controls.Add(MakeGroupLabel("Opciones Exclusivas del Director"));
-            sidebar.Controls.Add(MakeModuleButton("Administrar Usuarios", "⚙️", OnAdminUsuarios));
-            sidebar.Controls.Add(MakeModuleButton("Bitácora de Eventos", "🗒️", OnBitacora));
-        }
-        private Control MakeGroupLabel(string text)
+        // ==================== Construcción de tiles ====================
+        private void ConstruirTilesSegunRol()
         {
-            var lbl = new Label
+            canvas.SuspendLayout();
+            canvas.Controls.Clear();
+
+            // 6 opciones “máximas”
+            var items = new List<(string texto, string icono, EventHandler onClick)>
             {
-                Text = text,
-                Dock = DockStyle.Top,
-                Height = 28,
-                Font = MakeFont(11f, FontStyle.Bold),
-                ForeColor = Color.FromArgb(70, 84, 94),
-                Padding = new Padding(8, 4, 0, 0),
-                BackColor = Color.Transparent
+                ("Inscripción de Alumnos", "🧑‍🎓", OnInscripcion),
+                ("Captura de Calificaciones", "📝", OnCaptura),
+                ("Lista por Grupo", "📋", OnListaGrupo),
+                ("Estadísticas", "📊", OnEstadisticas),
+                ("Administrar Usuarios", "⚙️", OnAdminUsuarios),   // exclusivas del Director
+                ("Bitácora de Eventos", "🗒️", OnBitacora)          // exclusivas del Director
             };
-            return WrapTop(lbl);
+
+            if (RolActual == Rol.Secretaria)
+            {
+                // Filtra las exclusivas
+                items = items
+                    .Where(it => it.texto != "Administrar Usuarios" && it.texto != "Bitácora de Eventos")
+                    .ToList();
+            }
+
+            // Grid responsive: hasta 3 columnas; con 4 se arma 2x2, con 6 se arma 3x2, etc.
+            var cols = (items.Count <= 4) ? 2 : 3;
+            var rows = (int)Math.Ceiling(items.Count / (double)cols);
+
+            var grid = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = C_BG,
+                ColumnCount = cols,
+                RowCount = rows,
+                Padding = new Padding(0),
+                Margin = new Padding(0)
+            };
+            for (int c = 0; c < cols; c++) grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / cols));
+            for (int r = 0; r < rows; r++) grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100f / rows));
+            canvas.Controls.Add(grid);
+
+            foreach (var it in items)
+            {
+                var tile = CrearTile(it.texto, it.icono, it.onClick);
+                grid.Controls.Add(tile);
+            }
+
+            canvas.ResumeLayout();
         }
 
-        private Control MakeModuleButton(string text, string icon, EventHandler onClick)
+        private Control CrearTile(string texto, string iconoEmojiIgnorado, EventHandler onClick)
         {
+            var panel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.White,
+                Margin = new Padding(18),
+                Padding = new Padding(18),
+                MinimumSize = new Size(240, 160)
+            };
+            panel.Resize += (_, __) => SetRounded(panel, 14);
+            panel.MouseEnter += (_, __) => panel.BackColor = Blend(Color.White, C_ACCENT, 0.08);
+            panel.MouseLeave += (_, __) => panel.BackColor = Color.White;
+            panel.Click += onClick;
+
+            // Columna: ícono (centrado) | título (centrado, multilínea) | espacio | botón (centrado)
+            var col = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 4
+            };
+            col.RowStyles.Add(new RowStyle(SizeType.AutoSize));       // icono
+            col.RowStyles.Add(new RowStyle(SizeType.AutoSize));       // título
+            col.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));  // spacer
+            col.RowStyles.Add(new RowStyle(SizeType.Absolute, 44f));  // botón
+            panel.Controls.Add(col);
+
+            // Ícono vectorial (MDL2)
+            var lblIcon = new Label
+            {
+                Text = GetGlyph(texto),
+                AutoSize = true,
+                Dock = DockStyle.Top,
+                Font = IconFont(28f),
+                ForeColor = C_PRIMARY,
+                Margin = new Padding(0, 0, 0, 6),
+                TextAlign = ContentAlignment.MiddleCenter,
+                UseCompatibleTextRendering = true
+            };
+            lblIcon.Anchor = AnchorStyles.Top;
+            lblIcon.Click += onClick;
+            col.Controls.Add(lblIcon, 0, 0);
+
+            // Título centrado con word-wrap
+            var lblText = new Label
+            {
+                Text = texto,
+                AutoSize = true,
+                MaximumSize = new Size(int.MaxValue, 0),
+                Dock = DockStyle.Top,
+                Font = MakeFont(13f, FontStyle.Bold),
+                ForeColor = C_PRIMARY,
+                Margin = new Padding(0, 0, 0, 6),
+                TextAlign = ContentAlignment.MiddleCenter,
+                UseCompatibleTextRendering = true
+            };
+            lblText.Anchor = AnchorStyles.Top;
+            panel.SizeChanged += (_, __) =>
+            {
+                int w = Math.Max(10, panel.ClientSize.Width - panel.Padding.Horizontal - 12);
+                lblText.MaximumSize = new Size(w, 0);
+            };
+            lblText.Click += onClick;
+            col.Controls.Add(lblText, 0, 1);
+
+            // Spacer relleno
+            var spacer = new Panel { Dock = DockStyle.Fill };
+            spacer.Click += onClick;
+            col.Controls.Add(spacer, 0, 2);
+
+            // Botón centrado y con ancho relativo
             var btn = new Button
             {
-                Dock = DockStyle.Top,
-                Height = 44,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(12, 0, 12, 0),
+                Text = "Abrir",
                 FlatStyle = FlatStyle.Flat,
-                ForeColor = Color.FromArgb(31, 78, 95),
-                BackColor = Color.White,
-                Font = MakeFont(10f),
-                Text = $"{icon}  {text}",
+                ForeColor = Color.White,
+                BackColor = C_PRIMARY,
                 Cursor = Cursors.Hand,
-                Margin = new Padding(0, 6, 0, 0)
+                Height = 36,
+                Width = 220,                // tamaño base
+                Margin = new Padding(0)
             };
             btn.FlatAppearance.BorderSize = 0;
-            btn.FlatAppearance.MouseOverBackColor = Color.FromArgb(170, 207, 208);
-            btn.FlatAppearance.MouseDownBackColor = Color.FromArgb(121, 168, 169);
             btn.Click += onClick;
             btn.Resize += (_, __) => SetRounded(btn, 10);
-            SetRounded(btn, 10);
 
-            return WrapTop(btn);
+            // Host para centrar el botón dentro de la fila
+            var btnHost = new Panel { Dock = DockStyle.Fill };
+            btnHost.Controls.Add(btn);
+            btn.Anchor = AnchorStyles.None; // verdadero centrado
+            btnHost.Resize += (_, __) =>
+            {
+                int target = Math.Min(260, btnHost.ClientSize.Width - 24);
+                btn.Width = Math.Max(140, target);
+                btn.Left = (btnHost.ClientSize.Width - btn.Width) / 2;
+                btn.Top = (btnHost.ClientSize.Height - btn.Height) / 2;
+            };
+            col.Controls.Add(btnHost, 0, 3);
+
+            return panel;
         }
 
-        // Envuelve un control para stack vertical (Dock=Top) y solo lo devuelve.
-        private Panel WrapTop(Control c)
+        // ==================== Navegación (conserva tus handlers reales) ====================
+        private void OnInscripcion(object sender, EventArgs e) => Abrir("Inscripción de Alumnos");
+        private void OnCaptura(object sender, EventArgs e) => Abrir("Captura de Calificaciones");
+        private void OnListaGrupo(object sender, EventArgs e) => Abrir("Lista por Grupo");
+        private void OnEstadisticas(object sender, EventArgs e) => Abrir("Estadísticas");
+        private void OnAdminUsuarios(object sender, EventArgs e)
         {
-            var host = new Panel
-            {
-                Dock = DockStyle.Top,
-                Height = c.Height + 6,
-                Padding = new Padding(0, 0, 8, 6),
-                BackColor = Color.Transparent
-            };
-            c.Parent?.Controls.Remove(c);
-            c.Dock = DockStyle.Fill;
-            host.Controls.Add(c);
-            return host;
+            using var frm = new FormUsuarios();
+            frm.ShowDialog(this); // modal sobre el principal
         }
+        private void OnBitacora(object sender, EventArgs e) => Abrir("Bitácora de Eventos");
 
-        // ===================== CONTENIDO (placeholder) =====================
-        private void BuildWelcomeCard()
+        private void Abrir(string modulo)
         {
-            var card = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = Color.White,
-                Padding = new Padding(20),
-                Margin = new Padding(8)
-            };
-            SetRounded(card, 12);
-
-            var title = new Label
-            {
-                Text = "Resumen Escolar",
-                ForeColor = C_PRIMARY,
-                Dock = DockStyle.Top,
-                Height = 40,
-                TextAlign = ContentAlignment.MiddleLeft
-            };
-            card.Controls.Add(title);
-
-            var hint = new Label
-            {
-                Text = "Aquí irá el dashboard/resumen. Selecciona un módulo del menú izquierdo.",
-                Font = MakeFont(11f),
-                ForeColor = C_TXT_DIM,
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.TopLeft
-            };
-            card.Controls.Add(hint);
-
-            content.Controls.Add(card);
-        }
-
-        // ===================== Handlers de módulos =====================
-        private void OnInscripcion(object sender, EventArgs e) => ShowToast("Inscripción de Alumnos");
-        private void OnCaptura(object sender, EventArgs e) => ShowToast("Captura de Calificaciones");
-        private void OnListaGrupo(object sender, EventArgs e) => ShowToast("Lista por Grupo");
-        private void OnEstadisticas(object sender, EventArgs e) => ShowToast("Estadísticas");
-        private void OnAdminUsuarios(object sender, EventArgs e) => ShowToast("Administrar Usuarios");
-        private void OnBitacora(object sender, EventArgs e) => ShowToast("Bitácora de Eventos");
-
-
-        private void ShowToast(string modulo)
-        {
-            // Aquí puedes abrir tu Form real. De momento, demo:
+            // Reemplaza esto por abrir tus Forms reales
             MessageBox.Show($"Abrir módulo: {modulo}", "Navegación",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        // ===================== Utils =====================
+        // ==================== Logout ====================
+        private void BtnLogout_Click(object sender, EventArgs e)
+        {
+            try { SesionApp.CerrarSesion(); } catch { }
+            Close();
+        }
+
+        // ==================== Utils ====================
         private static void SetRounded(Control ctrl, int radius)
         {
             if (radius <= 0) { ctrl.Region = null; return; }
@@ -319,5 +352,37 @@ namespace gp_captura_boletas
                 ctrl.Region = new Region(path);
             }
         }
+
+        private static Color Blend(Color a, Color b, double t)
+        {
+            byte Lerp(byte x, byte y) => (byte)(x + (y - x) * t);
+            return Color.FromArgb(
+                Lerp(a.A, b.A),
+                Lerp(a.R, b.R),
+                Lerp(a.G, b.G),
+                Lerp(a.B, b.B));
+        }
+
+        private static Font IconFont(float size)
+        {
+            // Windows 10+ trae "Segoe MDL2 Assets"
+            try { return new Font("Segoe MDL2 Assets", size, FontStyle.Regular); }
+            catch { return MakeFont(size); } // fallback
+        }
+
+        private static string GetGlyph(string modulo)
+        {
+            switch (modulo)
+            {
+                case "Inscripción de Alumnos": return "\uE77B"; // Contact
+                case "Captura de Calificaciones": return "\uE104"; // Edit
+                case "Lista por Grupo": return "\uE14C"; // Bulleted list
+                case "Estadísticas": return "\uE9D2"; // Area chart
+                case "Administrar Usuarios": return "\uE713"; // Settings (gear)
+                case "Bitácora de Eventos": return "\uE12D"; // Calendar
+                default: return "\uE10F"; // Info (fallback)
+            }
+        }
+
     }
 }

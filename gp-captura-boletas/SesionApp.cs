@@ -13,7 +13,10 @@ namespace gp_captura_boletas
         public static string Nombre { get; private set; }
 
         private static string ConnectionString =>
-            ConfigurationManager.ConnectionStrings["AzureSql"].ConnectionString;
+            ConfigurationManager.ConnectionStrings["LocalSql"].ConnectionString;
+
+        // SesionApp.cs
+        public static string ConnStr => ConfigurationManager.ConnectionStrings["LocalSql"].ConnectionString;
 
         // 👉 Inicia sesión validando en la BD
         public static bool IniciarSesion(string usuario, string password)
@@ -78,5 +81,25 @@ namespace gp_captura_boletas
                 UsuarioID = 0; Usuario = null; Rol = null; Nombre = null;
             }
         }
+
+        public static bool UsuarioExiste(string usuario)
+        {
+            try
+            {
+                using (var conn = new SqlConnection(ConnectionString))
+                using (var cmd = new SqlCommand("SELECT 1 FROM dbo.Usuario WHERE Usuario = @u", conn))
+                {
+                    cmd.Parameters.AddWithValue("@u", usuario);
+                    conn.Open();
+                    var r = cmd.ExecuteScalar();
+                    return r != null;
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Error al verificar usuario: " + ex.Message);
+            }
+        }
+
     }
 }
