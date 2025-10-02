@@ -5,14 +5,12 @@ using System.Runtime.InteropServices;
 // La información general de un ensamblado se controla mediante el siguiente 
 // conjunto de atributos. Cambie estos valores de atributo para modificar la información
 // asociada con un ensamblado.
-[assembly: AssemblyTitle("gp-captura-boletas")]
-[assembly: AssemblyDescription("")]
-[assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("gp-captura-boletas")]
-[assembly: AssemblyCopyright("Copyright ©  2025")]
-[assembly: AssemblyTrademark("")]
-[assembly: AssemblyCulture("")]
+[assembly: AssemblyTitle("MiAppEscolar")]
+[assembly: AssemblyDescription("Sistema de captura de calificaciones")]
+[assembly: AssemblyCompany("Mi Organización")]
+[assembly: AssemblyProduct("MiAppEscolar")]
+[assembly: AssemblyCopyright("© 2025")]
+[assembly: AssemblyFileVersion("1.0.0.0")]
 
 // Si establece ComVisible en false, los tipos de este ensamblado no estarán visibles 
 // para los componentes COM.  Si es necesario obtener acceso a un tipo en este ensamblado desde 
@@ -30,4 +28,3 @@ using System.Runtime.InteropServices;
 //      Revisión
 //
 [assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]

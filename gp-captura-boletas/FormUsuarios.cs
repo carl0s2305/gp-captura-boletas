@@ -1,11 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace gp_captura_boletas
@@ -21,14 +16,63 @@ namespace gp_captura_boletas
             Text = "Administrar Usuarios";
             StartPosition = FormStartPosition.CenterParent;
             MinimumSize = new Size(820, 520);
+            AutoScaleMode = AutoScaleMode.Dpi;
+            DoubleBuffered = true;
 
-            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
-            root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220));
-            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            Controls.Add(root);
+            this.Font = new Font("Aptos", 10f, FontStyle.Regular);
+
+            // ===== Contenedor padre (2 filas: header y contenido) =====
+            var outer = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty,
+                BackColor = Color.White
+            };
+            outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 56f));     // header fijo
+            outer.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));     // contenido
+            Controls.Add(outer);
+
+            // ===== Encabezado verde =====
+            var header = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(31, 78, 95) };
+            outer.Controls.Add(header, 0, 0);
+
+            header.Controls.Add(new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = Color.FromArgb(0, 0, 0, 40) });
+
+            var lblHeader = new Label
+            {
+                Text = "Usuarios",
+                Dock = DockStyle.Fill,
+                ForeColor = Color.White,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Font = new Font("Aptos", 14f, FontStyle.Bold)
+            };
+            header.Controls.Add(lblHeader);
+
+            // ===== Contenido (2 columnas: acciones + grilla) =====
+            var root = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty,
+                BackColor = Color.White
+            };
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220f));
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            outer.Controls.Add(root, 0, 1);
 
             // Lado izquierdo: acciones
-            var left = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(16), AutoScroll = true };
+            var left = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                Padding = new Padding(16),
+                AutoScroll = true,
+                BackColor = Color.FromArgb(244, 247, 247) // mismo tono que tu app
+            };
             root.Controls.Add(left, 0, 0);
 
             btnAdd = new Button { Text = "➕  Agregar Usuario", Width = 180, Height = 36 };
@@ -36,7 +80,7 @@ namespace gp_captura_boletas
             btnDel = new Button { Text = "🗑️  Eliminar Usuario", Width = 180, Height = 36 };
             left.Controls.AddRange(new Control[] { btnAdd, btnEdit, btnDel });
 
-            // Centro: grilla
+            // Centro
             grid = new DataGridView
             {
                 Dock = DockStyle.Fill,
@@ -46,8 +90,24 @@ namespace gp_captura_boletas
                 AutoGenerateColumns = false,
                 AllowUserToAddRows = false,
                 AllowUserToDeleteRows = false,
-                RowHeadersVisible = false
+                RowHeadersVisible = false,
+
+                BackgroundColor = Color.White,
+                BorderStyle = BorderStyle.None,
+                CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal,
+                GridColor = Color.FromArgb(230, 230, 230),
+                EnableHeadersVisualStyles = false
             };
+            grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(31, 78, 95);
+            grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+            grid.ColumnHeadersDefaultCellStyle.Font = new Font("Aptos", 10f, FontStyle.Bold);
+            grid.DefaultCellStyle.BackColor = Color.White;
+            grid.DefaultCellStyle.ForeColor = Color.FromArgb(30, 30, 30);
+            grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(170, 207, 208);
+            grid.DefaultCellStyle.SelectionForeColor = Color.FromArgb(30, 30, 30);
+            grid.ColumnHeadersHeight = 34;
+            grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+
             root.Controls.Add(grid, 1, 0);
 
             // Columnas
@@ -60,19 +120,16 @@ namespace gp_captura_boletas
             grid.DataSource = bs;
 
             Load += (_, __) => Refrescar();
-
-            // Acciones
             btnAdd.Click += (_, __) => Agregar();
             btnEdit.Click += (_, __) => ModificarSeleccionado();
             btnDel.Click += (_, __) => EliminarSeleccionado();
-
             grid.CellDoubleClick += (_, __) => ModificarSeleccionado();
         }
 
         private UsuarioDto Seleccionado()
         {
             return bs.Current as UsuarioDto;
-        }
+        } 
 
         private void Refrescar()
         {
@@ -111,7 +168,7 @@ namespace gp_captura_boletas
                     }
 
                     UsuarioRepo.Insert(dlg.Modelo.Usuario,
-                                       dlg.PasswordPlano, // ya validada
+                                       dlg.PasswordPlano,
                                        dlg.Modelo.Nombre,
                                        dlg.Modelo.Rol);
                     Refrescar();

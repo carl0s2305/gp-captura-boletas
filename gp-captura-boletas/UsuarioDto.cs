@@ -11,6 +11,6 @@ namespace gp_captura_boletas
         public int UsuarioID { get; set; }
         public string Usuario { get; set; }
         public string Nombre { get; set; }
-        public string Rol { get; set; }  // "DIRECTOR" | "SECRETARIA"
+        public string Rol { get; set; }  // "DIRECTOR" | "SECRETARIA/O"
     }
 }

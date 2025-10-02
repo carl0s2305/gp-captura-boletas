@@ -14,9 +14,9 @@ namespace gp_captura_boletas
 
 
         // ===== Validación en vivo =====
-        private readonly int? _idEdicion;         // para excluirse en checos de unicidad
+        private readonly int? _idEdicion;
         private ErrorProvider _err;
-        private Label _lblPwd;                    // checklist password
+        private Label _lblPwd;
         private Timer _debounceUser;
 
 
@@ -25,7 +25,7 @@ namespace gp_captura_boletas
         private Button btnOk, btnCancel;
 
         public UsuarioDto Modelo { get; private set; }
-        public string PasswordPlano { get; private set; } // null si no se cambia
+        public string PasswordPlano { get; private set; }
 
         // ====== Paleta / Tipografía ======
         static readonly Color C_BG = Color.FromArgb(244, 247, 247); // #F4F7F7
@@ -35,7 +35,7 @@ namespace gp_captura_boletas
 
         static Font Fx(float size, FontStyle style = FontStyle.Regular)
         {
-            try { return new Font("Berlin Sans FB", size, style); }
+            try { return new Font("Aptos", size, style); }
             catch { return new Font("Segoe UI", size, style); }
         }
 
@@ -60,9 +60,6 @@ namespace gp_captura_boletas
             _debounceUser = new Timer { Interval = 400 };
             _debounceUser.Tick += (_, __) => { _debounceUser.Stop(); ChecarUsuarioAsync(); };
 
-
-
-
             // ===== Root: Título / Contenido / Botonera =====
             var root = new TableLayoutPanel
             {
@@ -70,26 +67,44 @@ namespace gp_captura_boletas
                 BackColor = C_BG,
                 ColumnCount = 1,
                 RowCount = 3,
-                Padding = new Padding(18)
+                Padding = new Padding(0) // sin padding para que la franja ocupe todo el ancho
             };
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));         // título
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));     // contenido
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));         // botones
+            // Fila 0: franja fija / Fila 1: contenido / Fila 2: botones
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 56f));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             Controls.Add(root);
 
-            // ===== Título =====
+            // ===== Franja de título =====
+            var header = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = C_PRIMARY // #1F4E5F
+            };
+            root.Controls.Add(header, 0, 0);
+
+            // línea sutil inferior
+            header.Controls.Add(new Panel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 1,
+                BackColor = Color.FromArgb(0, 0, 0, 40)
+            });
+
+            // título del formulario, centrado
             var lblTitle = new Label
             {
-                Text = Text,
-                ForeColor = C_PRIMARY,
-                Dock = DockStyle.Top,
-                Height = 40,
-                TextAlign = ContentAlignment.MiddleCenter
+                Text = Text, // "Agregar usuario" o "Modificar usuario"
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Font = Fx(14f, FontStyle.Bold),
+                ForeColor = Color.White,
+                Padding = new Padding(8, 0, 8, 0)
             };
-            root.Controls.Add(lblTitle, 0, 0);
+            header.Controls.Add(lblTitle);
 
             // ===== Contenido centrado =====
-            var contentHost = new Panel { Dock = DockStyle.Fill, Padding = new Padding(6) };
+            var contentHost = new Panel { Dock = DockStyle.Fill, Padding = new Padding(18) };
             root.Controls.Add(contentHost, 0, 1);
 
             var grid = new TableLayoutPanel
@@ -114,7 +129,7 @@ namespace gp_captura_boletas
             tbUsuario = MakeTextBox();
             tbNombre = MakeTextBox();
 
-            cbRol = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = Color.White, ForeColor = C_PRIMARY };
+            cbRol = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = Color.White, ForeColor = Color.Black };
             if (!_esEdicion)
             {
                 // Creación: solo SECRETARIA
@@ -155,7 +170,7 @@ namespace gp_captura_boletas
             confirmPanel.Controls.Add(tbPass2); tbPass2.Dock = DockStyle.Fill;
             confirmPanel.Controls.Add(eye2); eye2.Dock = DockStyle.Right;
 
-            // ===== Filas (¡en el GRID, no en root!) =====
+            // ===== Filas (¡en el GRID) =====
             AddRowToGrid(grid, "Usuario:", tbUsuario);
             AddRowToGrid(grid, "Nombre completo:", tbNombre);
             AddRowToGrid(grid, "Rol:", cbRol);
@@ -180,7 +195,7 @@ namespace gp_captura_boletas
             {
                 ClearUsuarioError();
                 _debounceUser.Stop();
-                _debounceUser.Start();      // still does debounce check
+                _debounceUser.Start();
             };
 
             // Carga de edición
@@ -197,26 +212,36 @@ namespace gp_captura_boletas
             }
 
             // ===== Botonera abajo a la derecha =====
-            var buttonsHost = new Panel { Dock = DockStyle.Fill, Height = 56 };
-            root.Controls.Add(buttonsHost, 0, 2);
-
-            var btnBar = new FlowLayoutPanel
+            var actionBar = new TableLayoutPanel
             {
-                Dock = DockStyle.Right,
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false,
-                Margin = new Padding(0),
-                Padding = new Padding(0)
+                Dock = DockStyle.Fill,
+                ColumnCount = 3,
+                Padding = new Padding(18, 8, 18, 12), // margen izq/der para que no se corte
+                BackColor = C_BG
             };
-            buttonsHost.Controls.Add(btnBar);
+
+            actionBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            actionBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            actionBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            root.Controls.Add(actionBar, 0, 2);
 
             btnCancel = MakeOutlineButton("Cancelar");
             btnOk = MakeSolidButton("Guardar");
-            btnBar.Controls.Add(btnCancel);
-            btnBar.Controls.Add(new Panel { Width = 10 });
-            btnBar.Controls.Add(btnOk);
 
-            // Validación mínima de confirmación
+            // márgenes entre botones
+            btnCancel.Margin = new Padding(0, 0, 10, 0);
+            btnOk.Margin = new Padding(0);
+
+            // agrega (el expansor vacío ocupa la izquierda)
+            actionBar.Controls.Add(new Panel(), 0, 0);
+            actionBar.Controls.Add(btnCancel, 1, 0);
+            actionBar.Controls.Add(btnOk, 2, 0);
+
+            // (opcional) asegura tamaño mínimo en escalados altos
+            btnCancel.MinimumSize = new Size(110, 36);
+            btnOk.MinimumSize = new Size(110, 36);
+
+            // Validación de confirmación
             btnOk.Click += (_, __) =>
             {
                 // al inicio del Click:
@@ -228,7 +253,7 @@ namespace gp_captura_boletas
                 string p1 = tbPass.Text;
                 string p2 = tbPass2.Text;
 
-                // Validaciones mínimas
+                // Validaciones 
                 if (string.IsNullOrWhiteSpace(usuario) || string.IsNullOrWhiteSpace(nombre) || string.IsNullOrWhiteSpace(rol))
                 {
                     MessageBox.Show("Usuario, Nombre y Rol son obligatorios.", "Validación",
@@ -236,7 +261,7 @@ namespace gp_captura_boletas
                     return;
                 }
 
-                // Validaciones de contraseña (igual a lo que ya tenías)
+                // Validaciones de contraseña
                 if (!_esEdicion)
                 {
                     if (string.IsNullOrEmpty(p1) || string.IsNullOrEmpty(p2))
@@ -269,7 +294,7 @@ namespace gp_captura_boletas
                     lblUsuarioError.Visible = true;
                     tbUsuario.BackColor = Color.MistyRose;
                     tbUsuario.Focus();
-                    return;  // ⛔ aquí se corta, no cierra el formulario
+                    return;  // aquí se corta, no cierra el formulario
                 }
 
                 // Si pasó todas las validaciones: asigna modelo
@@ -279,7 +304,7 @@ namespace gp_captura_boletas
                 Modelo.Rol = rol;
                 PasswordPlano = (!_esEdicion) ? p1 : (string.IsNullOrWhiteSpace(p1) ? null : p1);
 
-                DialogResult = DialogResult.OK; // ✅ Solo aquí se cierra
+                DialogResult = DialogResult.OK; // Solo aquí se cierra
             };
 
             btnCancel.Click += (_, __) => DialogResult = DialogResult.Cancel;
@@ -287,7 +312,6 @@ namespace gp_captura_boletas
             AcceptButton = btnOk;
             CancelButton = btnCancel;
 
-            // ===== Checklist de contraseña (vive debajo del grid) =====
             // ===== Checklist de contraseña (fila debajo de confirmación) =====
             _lblPwd = new Label
             {
@@ -362,7 +386,7 @@ namespace gp_captura_boletas
                 if (existe) MarcarError(tbUsuario, "Este nombre de usuario ya está en uso.");
                 else LimpiarError(tbUsuario);
             }
-            catch { /* no molestes al usuario por errores transitorios */ }
+            catch {}
         }
         private void AddRowToGrid(TableLayoutPanel grid, string label, Control ctl)
         {
@@ -372,7 +396,7 @@ namespace gp_captura_boletas
                 Text = label,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleRight,
-                ForeColor = C_PRIMARY,
+                ForeColor = Color.Black,
                 Font = Fx(11f)
             };
             ctl.Dock = DockStyle.Fill; ctl.Margin = new Padding(4);
@@ -388,7 +412,7 @@ namespace gp_captura_boletas
             {
                 BorderStyle = BorderStyle.FixedSingle,
                 BackColor = Color.White,
-                ForeColor = C_PRIMARY,
+                ForeColor = Color.Black,
                 Height = 28,
                 Margin = new Padding(4),
                 UseSystemPasswordChar = password
@@ -405,13 +429,13 @@ namespace gp_captura_boletas
                 AutoSize = false,
                 Width = 110,
                 Height = 36,
-                BackColor = C_ACCENT,
+                BackColor = C_PRIMARY,
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat
             };
             b.FlatAppearance.BorderSize = 0;
-            b.MouseEnter += (_, __) => b.BackColor = C_PRIMARY;
-            b.MouseLeave += (_, __) => b.BackColor = C_ACCENT;
+            b.MouseEnter += (_, __) => b.BackColor = C_ACCENT;
+            b.MouseLeave += (_, __) => b.BackColor = C_PRIMARY;
             return b;
         }
 
@@ -427,7 +451,7 @@ namespace gp_captura_boletas
                 ForeColor = C_PRIMARY,
                 FlatStyle = FlatStyle.Flat
             };
-            b.FlatAppearance.BorderColor = C_MID;
+            b.FlatAppearance.BorderColor = C_PRIMARY;
             b.FlatAppearance.BorderSize = 1;
             b.MouseEnter += (_, __) => b.BackColor = Color.White;
             b.MouseLeave += (_, __) => b.BackColor = C_BG;

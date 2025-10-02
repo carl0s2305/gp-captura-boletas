@@ -7,7 +7,7 @@
     <ProjectGuid>{084ACF3E-1842-444F-9A23-7FE71EF41E3D}</ProjectGuid>
     <OutputType>WinExe</OutputType>
     <RootNamespace>gp_captura_boletas</RootNamespace>
-    <AssemblyName>gp-captura-boletas</AssemblyName>
+    <AssemblyName>LLenado de Boletas</AssemblyName>
     <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <LangVersion>latest</LangVersion>
     <FileAlignment>512</FileAlignment>
@@ -32,6 +32,12 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup>
+    <StartupObject>gp_captura_boletas.Program</StartupObject>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationIcon>Resources\icono.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -74,6 +80,14 @@
     </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <Compile Include="RoundedButton.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="SesionApp.cs" />
     <Compile Include="UsuarioDto.cs" />
     <Compile Include="UsuarioRepo.cs" />
@@ -85,14 +99,9 @@
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
       <SubType>Designer</SubType>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
-    <Compile Include="Properties\Resources.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DependentUpon>Resources.resx</DependentUpon>
-      <DesignTime>True</DesignTime>
-    </Compile>
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
@@ -108,6 +117,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\ESCUELA.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\icono.ico" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

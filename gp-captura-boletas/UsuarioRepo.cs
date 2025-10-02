@@ -61,7 +61,7 @@ SELECT SCOPE_IDENTITY();", cn);
             cmd.Parameters.AddWithValue("@n", nombre);
             cmd.Parameters.AddWithValue("@r", rol);
             cn.Open();
-            return (int)(decimal)cmd.ExecuteScalar(); // o Convert.ToInt32(...)
+            return (int)(decimal)cmd.ExecuteScalar();
         }
 
         public static void Update(int id, string usuario, string nombre, string rol, string passwordPlanoOrNull)

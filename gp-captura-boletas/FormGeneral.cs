@@ -11,8 +11,8 @@ namespace gp_captura_boletas
     {
         // ===== Paleta =====
         private static readonly Color C_BG = Color.FromArgb(244, 247, 247);  // #F4F7F7
-        private static readonly Color C_ACCENT = Color.FromArgb(121, 168, 169);  // #79A8A9
-        private static readonly Color C_PRIMARY = Color.FromArgb(31, 78, 95);     // #1F4E5F
+        private static readonly Color C_ACCENT = Color.FromArgb(121, 168, 169);
+        private static readonly Color C_PRIMARY = Color.FromArgb(31, 78, 95);
         private static readonly Color C_TXT_DIM = Color.FromArgb(70, 84, 94);
 
         private static Font MakeFont(float size, FontStyle style = FontStyle.Regular)
@@ -22,13 +22,11 @@ namespace gp_captura_boletas
         }
 
         // ===== Layout raíz =====
-        private Panel header;   // barra superior
         private Panel canvas;   // aquí pondremos los tiles
 
         // ===== Cabecera =====
-        private Label lblTitle;
         private Label lblUser;
-        private Button btnLogout;
+        private RoundedButton btnLogout;
 
         // ===== Config. rol =====
         private enum Rol { Director, Secretaria }
@@ -113,7 +111,7 @@ namespace gp_captura_boletas
             rightStack.Controls.Add(pnlBtn, 0, 0);
 
             // Botón "Cerrar sesión" (centrado)
-            btnLogout = new Button
+            btnLogout = new RoundedButton
             {
                 Text = "Cerrar Sesión",
                 AutoSize = true,
@@ -169,7 +167,7 @@ namespace gp_captura_boletas
             {
                 Text = "Sistema de Control de Calificaciones",
                 ForeColor = Color.White,
-                Font = new Font("Segoe UI Semibold", 20f),
+                Font = new Font("Aptos", 20f),
                 Dock = DockStyle.Top,
                 Height = 40,
                 TextAlign = ContentAlignment.MiddleCenter
@@ -180,7 +178,7 @@ namespace gp_captura_boletas
             {
                 Text = "Escuela Primaria Emiliano Zapata",
                 ForeColor = Color.White,
-                Font = new Font("Segoe UI", 12f, FontStyle.Italic),
+                Font = new Font("Aptos", 12f, FontStyle.Italic),
                 Dock = DockStyle.Top,
                 Height = 26,
                 TextAlign = ContentAlignment.MiddleCenter
@@ -355,7 +353,7 @@ namespace gp_captura_boletas
             col.Controls.Add(spacer, 0, 2);
 
             // Botón centrado y con ancho relativo
-            var btn = new Button
+            var btn = new RoundedButton
             {
                 Text = "Abrir",
                 FlatStyle = FlatStyle.Flat,
@@ -364,7 +362,8 @@ namespace gp_captura_boletas
                 Cursor = Cursors.Hand,
                 Height = 36,
                 Width = 220,                // tamaño base
-                Margin = new Padding(0)
+                Margin = new Padding(0),
+                Font = MakeFont(11f, FontStyle.Regular)
             };
             btn.FlatAppearance.BorderSize = 0;
             btn.Click += onClick;
