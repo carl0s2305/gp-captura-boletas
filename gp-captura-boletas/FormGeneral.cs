@@ -39,12 +39,12 @@ namespace gp_captura_boletas
             // Ventana
             Text = "Sistema de Control de Calificaciones";
             StartPosition = FormStartPosition.CenterScreen;
-            MinimumSize = new Size(980, 680);
+            MinimumSize = new Size(1020, 700);
             BackColor = C_PRIMARY;
             DoubleBuffered = true;
             AutoScaleMode = AutoScaleMode.Dpi;
 
-            // Layout raíz (Header + Canvas)
+            // ===== Layout raíz (TopBar + Canvas) =====
             var root = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
@@ -52,58 +52,76 @@ namespace gp_captura_boletas
                 ColumnCount = 1,
                 RowCount = 2,
             };
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 96)); // alto de barra
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             Controls.Add(root);
 
-            // ===== Header =====
-            header = new Panel { Dock = DockStyle.Fill, BackColor = C_PRIMARY };
-            root.Controls.Add(header, 0, 0);
-
-            lblTitle = new Label
+            // ===== Barra superior única =====
+            var topBar = new Panel
             {
-                Text = "SISTEMA DE CONTROL DE CALIFICACIONES",
-                AutoSize = false,
-                Dock = DockStyle.Left,
-                Width = 560,
-                TextAlign = ContentAlignment.MiddleLeft,
-                ForeColor = Color.White,
-                Padding = new Padding(24, 0, 0, 0),
-                Font = MakeFont(12f, FontStyle.Bold)
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(31, 78, 95)
             };
-            header.Controls.Add(lblTitle);
+            root.Controls.Add(topBar, 0, 0);
 
-            var right = new FlowLayoutPanel
+            // Logo a la izquierda (se hace más alto con la barra)
+            var picLogo = new PictureBox
+            {
+                Image = Properties.Resources.escudo,
+                SizeMode = PictureBoxSizeMode.Zoom,
+                Dock = DockStyle.Left,
+                Width = 96,
+                Margin = new Padding(12, 8, 12, 8)
+            };
+            topBar.Controls.Add(picLogo);
+
+            topBar.SizeChanged += (_, __) =>
+            {
+                // deja 8px arriba y abajo para que respire
+                int altoDisponible = topBar.Height - 16;
+                picLogo.Width = Math.Max(72, altoDisponible);
+            };
+
+            // ===== Panel derecho: botón centrado arriba + usuario centrado abajo =====
+            var rightStack = new TableLayoutPanel
             {
                 Dock = DockStyle.Right,
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false,
-                Padding = new Padding(0, 16, 24, 16),
-                AutoSize = true,
-                BackColor = Color.Transparent
+                Width = 280,                     // ancho fijo para no invadir el título
+                BackColor = Color.Transparent,
+                ColumnCount = 1,
+                RowCount = 2,
+                Padding = new Padding(16, 8, 16, 8)
             };
-            header.Controls.Add(right);
+            rightStack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            rightStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 40f)); // fila del botón
+            rightStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 28f)); // fila del usuario
+            topBar.Controls.Add(rightStack);
 
-            lblUser = new Label
-            {
-                AutoSize = true,
-                ForeColor = Color.White,
-                Font = MakeFont(11f),
-                Text = $"👤 {ObtenerNombre()} ({RolActual})",
-                TextAlign = ContentAlignment.MiddleLeft,
-                Margin = new Padding(0, 8, 12, 0)
-            };
-            right.Controls.Add(lblUser);
+            // contenedor para CENTRAR el botón dentro de su celda
+            // Contenedor del botón
+            var pnlBtn = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3 };
+            pnlBtn.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            pnlBtn.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            pnlBtn.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
 
+            // Contenedor del usuario
+            var pnlUser = new TableLayoutPanel { Dock = DockStyle.Fill };
+            pnlUser.ColumnCount = 3;
+            pnlUser.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            pnlUser.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            pnlUser.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            rightStack.Controls.Add(pnlBtn, 0, 0);
+
+            // Botón "Cerrar sesión" (centrado)
             btnLogout = new Button
             {
                 Text = "Cerrar Sesión",
                 AutoSize = true,
-                Height = 36,
+                Height = 32,
                 FlatStyle = FlatStyle.Flat,
                 ForeColor = C_PRIMARY,
                 BackColor = Color.White,
-                Padding = new Padding(12, 6, 12, 6),
+                Padding = new Padding(12, 4, 12, 4),
                 TabStop = false,
                 Cursor = Cursors.Hand
             };
@@ -111,9 +129,68 @@ namespace gp_captura_boletas
             btnLogout.Resize += (_, __) => SetRounded(btnLogout, 16);
             btnLogout.Click += BtnLogout_Click;
             SetRounded(btnLogout, 16);
-            right.Controls.Add(btnLogout);
+            pnlBtn.Controls.Add(btnLogout, 1, 0);
 
-            // ===== Canvas (solo grid de botones) =====
+
+            // centrado real del botón
+            pnlBtn.Resize += (_, __) =>
+            {
+                btnLogout.Left = (pnlBtn.ClientSize.Width - btnLogout.Width) / 2;
+                btnLogout.Top = (pnlBtn.ClientSize.Height - btnLogout.Height) / 2;
+            };
+
+            // contenedor para CENTRAR el usuario dentro de su celda
+            rightStack.Controls.Add(pnlUser, 0, 1);
+
+            // Usuario (centrado)
+            lblUser = new Label
+            {
+                AutoSize = true,
+                ForeColor = Color.White,
+                Font = MakeFont(11f),
+                Text = $"👤 {ObtenerNombre()} ({RolActual})",
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+            pnlUser.Controls.Add(lblUser, 1, 0);
+
+            // centrado real del label
+            pnlUser.Resize += (_, __) =>
+            {
+                lblUser.Left = (pnlUser.ClientSize.Width - lblUser.Width) / 2;
+                lblUser.Top = (pnlUser.ClientSize.Height - lblUser.Height) / 2;
+            };
+
+
+            // Centro: título y subtítulo (entre el logo y el panel derecho)
+            var titlePanel = new Panel { Dock = DockStyle.Fill };
+            topBar.Controls.Add(titlePanel);
+
+            var lblTitulo = new Label
+            {
+                Text = "Sistema de Control de Calificaciones",
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI Semibold", 20f),
+                Dock = DockStyle.Top,
+                Height = 40,
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+            titlePanel.Controls.Add(lblTitulo);
+
+            var lblSubtitulo = new Label
+            {
+                Text = "Escuela Primaria Emiliano Zapata",
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 12f, FontStyle.Italic),
+                Dock = DockStyle.Top,
+                Height = 26,
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+            titlePanel.Controls.Add(lblSubtitulo);
+
+            // Asegurar que el subtítulo quede debajo del título
+            titlePanel.Controls.SetChildIndex(lblSubtitulo, 0);
+
+            // ===== Canvas (grid de módulos) =====
             canvas = new Panel
             {
                 Dock = DockStyle.Fill,
@@ -122,9 +199,8 @@ namespace gp_captura_boletas
             };
             root.Controls.Add(canvas, 0, 1);
 
-            // Pinta el grid según el rol actual
+            // Construir tiles según rol
             ConstruirTilesSegunRol();
-            // Si cambias de usuario en caliente, llama de nuevo a ConstruirTilesSegunRol()
         }
 
         // ==================== Rol y usuario (ajusta a tu sesión real) ====================

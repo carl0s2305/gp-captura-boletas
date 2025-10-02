@@ -8,7 +8,19 @@ namespace gp_captura_boletas
 {
     public partial class FormUsuarioEdit : Form
     {
-        private TextBox tbUsuario, tbNombre, tbEmail, tbPass, tbPass2;
+        private readonly bool _esEdicion;
+        private Label lblUsuarioError;
+
+
+
+        // ===== Validación en vivo =====
+        private readonly int? _idEdicion;         // para excluirse en checos de unicidad
+        private ErrorProvider _err;
+        private Label _lblPwd;                    // checklist password
+        private Timer _debounceUser;
+
+
+        private TextBox tbUsuario, tbNombre, tbPass, tbPass2;
         private ComboBox cbRol;
         private Button btnOk, btnCancel;
 
@@ -37,6 +49,19 @@ namespace gp_captura_boletas
             MaximizeBox = MinimizeBox = false;
             BackColor = C_BG;
             Font = Fx(11f);
+
+            _esEdicion = (existente != null);
+            _idEdicion = existente?.UsuarioID;
+
+            // ErrorProvider
+            _err = new ErrorProvider { BlinkStyle = ErrorBlinkStyle.NeverBlink, Icon = SystemIcons.Warning };
+
+            // Timers de debounce (ms)
+            _debounceUser = new Timer { Interval = 400 };
+            _debounceUser.Tick += (_, __) => { _debounceUser.Stop(); ChecarUsuarioAsync(); };
+
+
+
 
             // ===== Root: Título / Contenido / Botonera =====
             var root = new TableLayoutPanel
@@ -88,11 +113,29 @@ namespace gp_captura_boletas
             // ===== Controles =====
             tbUsuario = MakeTextBox();
             tbNombre = MakeTextBox();
-            tbEmail = MakeTextBox();
 
             cbRol = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = Color.White, ForeColor = C_PRIMARY };
-            if (existente == null) cbRol.Items.AddRange(new[] { "SECRETARIA" });
-            else cbRol.Items.AddRange(new[] { "DIRECTOR", "SECRETARIA" });
+            if (!_esEdicion)
+            {
+                // Creación: solo SECRETARIA
+                cbRol.Items.AddRange(new[] { "SECRETARIA/O" });
+                cbRol.SelectedIndex = 0;
+            }
+            else
+            {
+                // Edición: si era DIRECTOR, no permitir cambiar; si era SECRETARIA, seguir siéndolo.
+                if (existente.Rol == "DIRECTOR")
+                {
+                    cbRol.Items.Add("DIRECTOR");
+                    cbRol.SelectedIndex = 0;
+                    cbRol.Enabled = false;
+                }
+                else
+                {
+                    cbRol.Items.Add("SECRETARIA/O");
+                    cbRol.SelectedIndex = 0;
+                }
+            }
 
             tbPass = MakeTextBox(true); SetCue(tbPass, "Contraseña");
             tbPass2 = MakeTextBox(true); SetCue(tbPass2, "Confirmar contraseña");
@@ -115,23 +158,42 @@ namespace gp_captura_boletas
             // ===== Filas (¡en el GRID, no en root!) =====
             AddRowToGrid(grid, "Usuario:", tbUsuario);
             AddRowToGrid(grid, "Nombre completo:", tbNombre);
-            AddRowToGrid(grid, "Email:", tbEmail);
             AddRowToGrid(grid, "Rol:", cbRol);
             AddRowToGrid(grid, "Contraseña:", passPanel);
             AddRowToGrid(grid, "Confirmar contraseña:", confirmPanel);
+
+            // Mensaje de error debajo del Usuario
+            lblUsuarioError = new Label
+            {
+                ForeColor = Color.Red,
+                AutoSize = true,
+                Dock = DockStyle.Fill,
+                Visible = false,
+                Font = Fx(9f, FontStyle.Italic)
+            };
+            grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            grid.Controls.Add(lblUsuarioError, 1, grid.RowCount);
+            grid.RowCount++;
+
+            // Limpiar avisos al teclear
+            tbUsuario.TextChanged += (_, __) =>
+            {
+                ClearUsuarioError();
+                _debounceUser.Stop();
+                _debounceUser.Start();      // still does debounce check
+            };
 
             // Carga de edición
             if (existente != null)
             {
                 tbUsuario.Text = existente.Usuario;
                 tbNombre.Text = existente.Nombre;
-                tbEmail.Text = existente.Email;
                 cbRol.SelectedItem = existente.Rol;
                 if (existente.Rol == "DIRECTOR") cbRol.Enabled = false;
             }
             else
             {
-                cbRol.SelectedItem = "SECRETARIA";
+                cbRol.SelectedItem = "SECRETARIA/O";
             }
 
             // ===== Botonera abajo a la derecha =====
@@ -157,20 +219,151 @@ namespace gp_captura_boletas
             // Validación mínima de confirmación
             btnOk.Click += (_, __) =>
             {
-                if (tbPass.Text != tbPass2.Text)
+                // al inicio del Click:
+                ClearUsuarioError();
+
+                string usuario = (tbUsuario.Text ?? "").Trim();
+                string nombre = (tbNombre.Text ?? "").Trim();
+                string rol = cbRol.SelectedItem as string;
+                string p1 = tbPass.Text;
+                string p2 = tbPass2.Text;
+
+                // Validaciones mínimas
+                if (string.IsNullOrWhiteSpace(usuario) || string.IsNullOrWhiteSpace(nombre) || string.IsNullOrWhiteSpace(rol))
                 {
-                    MessageBox.Show("Las contraseñas no coinciden.", "Validación",
+                    MessageBox.Show("Usuario, Nombre y Rol son obligatorios.", "Validación",
                         MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
-                DialogResult = DialogResult.OK;
+
+                // Validaciones de contraseña (igual a lo que ya tenías)
+                if (!_esEdicion)
+                {
+                    if (string.IsNullOrEmpty(p1) || string.IsNullOrEmpty(p2))
+                    {
+                        MessageBox.Show("Escribe y confirma la contraseña.", "Validación",
+                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                    if (p1 != p2)
+                    {
+                        MessageBox.Show("Las contraseñas no coinciden.", "Validación",
+                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                    if (!PasswordFuerte(p1, out var msg))
+                    {
+                        MessageBox.Show("Contraseña inválida: " + msg, "Seguridad",
+                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                }
+
+                // Duplicados en BD
+                bool dupU = false;
+                try { dupU = UsuarioRepo.ExistsUsername(usuario, _idEdicion); } catch { }
+
+                if (dupU)
+                {
+                    lblUsuarioError.Text = "Este nombre de usuario ya está en uso.";
+                    lblUsuarioError.Visible = true;
+                    tbUsuario.BackColor = Color.MistyRose;
+                    tbUsuario.Focus();
+                    return;  // ⛔ aquí se corta, no cierra el formulario
+                }
+
+                // Si pasó todas las validaciones: asigna modelo
+                Modelo ??= new UsuarioDto();
+                Modelo.Usuario = usuario;
+                Modelo.Nombre = nombre;
+                Modelo.Rol = rol;
+                PasswordPlano = (!_esEdicion) ? p1 : (string.IsNullOrWhiteSpace(p1) ? null : p1);
+
+                DialogResult = DialogResult.OK; // ✅ Solo aquí se cierra
             };
+
             btnCancel.Click += (_, __) => DialogResult = DialogResult.Cancel;
 
             AcceptButton = btnOk;
             CancelButton = btnCancel;
+
+            // ===== Checklist de contraseña (vive debajo del grid) =====
+            // ===== Checklist de contraseña (fila debajo de confirmación) =====
+            _lblPwd = new Label
+            {
+                AutoSize = true,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.TopLeft,
+                ForeColor = Color.FromArgb(190, 60, 60), // rojo por defecto
+                Padding = new Padding(0, 6, 0, 6),
+                Visible = false // oculto de inicio
+            };
+            grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            grid.Controls.Add(_lblPwd, 0, grid.RowCount);
+            grid.SetColumnSpan(_lblPwd, 2);
+            grid.RowCount++;
+
+            tbPass.TextChanged += (_, __) => ActualizarChecklistPassword();
+            tbPass2.TextChanged += (_, __) => ActualizarChecklistPassword();
+
+            tbUsuario.Leave += (_, __) => ChecarUsuarioAsync();
+
+            ActualizarChecklistPassword(); // estado inicial correcto
         }
 
+        private void MarcarError(Control c, string msg)
+        {
+            _err.SetError(c, msg);
+            c.BackColor = Color.MistyRose;
+        }
+        private void LimpiarError(Control c)
+        {
+            _err.SetError(c, null);
+            c.BackColor = Color.White;
+        }
+        private void ActualizarChecklistPassword()
+        {
+            string p1 = tbPass.Text ?? "";
+            string p2 = tbPass2.Text ?? "";
+
+            bool okLen = p1.Length >= 8;
+            bool okUpp = Regex.IsMatch(p1, "[A-Z]");
+            bool okLow = Regex.IsMatch(p1, "[a-z]");
+            bool okNum = Regex.IsMatch(p1, "[0-9]");
+            bool okSpc = Regex.IsMatch(p1, "[^A-Za-z0-9]");
+            bool okEq = string.IsNullOrEmpty(p1) && string.IsNullOrEmpty(p2) ? false : (p1 == p2);
+
+            bool anyTyped = p1.Length > 0 || p2.Length > 0;
+            bool allOk = okLen && okUpp && okLow && okNum && okSpc && okEq;
+
+            // Mostrar solo si el usuario está escribiendo y aún falta algo
+            _lblPwd.Visible = anyTyped && !allOk;
+
+            string Mark(bool v, string t) => $"{(v ? "✔" : "✖")} {t}";
+            _lblPwd.Text =
+                Mark(okLen, "8+ car.") + "   " +
+                Mark(okUpp, "Mayús.") + "   " +
+                Mark(okLow, "Minús.") + Environment.NewLine +
+                Mark(okNum, "Número") + "   " +
+                Mark(okSpc, "Símbolo") + "   " +
+                Mark(okEq, "Coinciden");
+
+            _lblPwd.ForeColor = allOk ? Color.FromArgb(30, 120, 70) : Color.FromArgb(190, 60, 60);
+        }
+
+        private async void ChecarUsuarioAsync()
+        {
+            string u = (tbUsuario.Text ?? "").Trim();
+            if (u.Length == 0) { LimpiarError(tbUsuario); return; }
+
+            try
+            {
+                bool existe = await System.Threading.Tasks.Task.Run(() => UsuarioRepo.ExistsUsername(u, _idEdicion));
+                if (existe) MarcarError(tbUsuario, "Este nombre de usuario ya está en uso.");
+                else LimpiarError(tbUsuario);
+            }
+            catch { /* no molestes al usuario por errores transitorios */ }
+        }
         private void AddRowToGrid(TableLayoutPanel grid, string label, Control ctl)
         {
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
@@ -188,23 +381,6 @@ namespace gp_captura_boletas
             grid.RowCount++;
         }
 
-
-        // Helper
-        private void AddRow(TableLayoutPanel tl, string label, Control ctl, int row)
-        {
-            tl.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            tl.Controls.Add(new Label
-            {
-                Text = label,
-                TextAlign = ContentAlignment.MiddleRight,
-                Dock = DockStyle.Fill,
-                ForeColor = Color.FromArgb(31, 78, 95)
-            }, 0, row);
-            ctl.Dock = DockStyle.Fill;
-            tl.Controls.Add(ctl, 1, row);
-        }
-
-
         // ===== Helpers de estilo =====
         private TextBox MakeTextBox(bool password = false)
         {
@@ -221,26 +397,6 @@ namespace gp_captura_boletas
             tb.LostFocus += (_, __) => tb.BackColor = Color.White;
             return tb;
         }
-
-        private void AddRow(TableLayoutPanel grid, string label, Control ctl)
-        {
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-            var lbl = new Label
-            {
-                Text = label,
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleRight,
-                ForeColor = C_PRIMARY,
-                Font = Fx(11)
-            };
-            ctl.Dock = DockStyle.Fill;
-            ctl.Margin = new Padding(4, 4, 4, 4);
-
-            grid.Controls.Add(lbl, 0, grid.RowCount);
-            grid.Controls.Add(ctl, 1, grid.RowCount);
-            grid.RowCount++;
-        }
-
         private Button MakeSolidButton(string text)
         {
             var b = new Button
@@ -277,12 +433,6 @@ namespace gp_captura_boletas
             b.MouseLeave += (_, __) => b.BackColor = C_BG;
             return b;
         }
-
-        private Control Spacer(int w) => new Panel { Width = w, Height = 1 };
-
-        // (tu SetCue con SendMessage ya existente se mantiene)
-
-
         // Validador de fuerza
         private bool PasswordFuerte(string p, out string mensaje)
         {
@@ -305,6 +455,13 @@ namespace gp_captura_boletas
                 SendMessage(tb.Handle, EM_SETCUEBANNER, (IntPtr)1, placeholder);
             else
                 tb.HandleCreated += (s, e) => SendMessage(tb.Handle, EM_SETCUEBANNER, (IntPtr)1, placeholder);
+        }
+        private void ClearUsuarioError()
+        {
+            lblUsuarioError.Visible = false;
+            lblUsuarioError.Text = string.Empty;
+            tbUsuario.BackColor = Color.White;
+            _err.SetError(tbUsuario, null); // por si aún usas ErrorProvider
         }
     }
 }

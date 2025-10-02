@@ -54,7 +54,6 @@ namespace gp_captura_boletas
             grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "UsuarioID", HeaderText = "ID", Width = 60 });
             grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Usuario", HeaderText = "Usuario", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, FillWeight = 30 });
             grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Nombre", HeaderText = "Nombre", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, FillWeight = 45 });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Email", HeaderText = "Email", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, FillWeight = 45 });
             grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Rol", HeaderText = "Rol", Width = 110 });
 
             bs = new BindingSource();
@@ -102,12 +101,6 @@ namespace gp_captura_boletas
                             MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         return;
                     }
-                    if (UsuarioRepo.ExistsEmail(dlg.Modelo.Email, null))
-                    {
-                        MessageBox.Show("El correo ya está en uso.", "Validación",
-                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        return;
-                    }
 
                     // Regla: NO crear DIRECTOR (el form ya lo impide, doble seguro)
                     if (dlg.Modelo.Rol == "DIRECTOR")
@@ -120,7 +113,6 @@ namespace gp_captura_boletas
                     UsuarioRepo.Insert(dlg.Modelo.Usuario,
                                        dlg.PasswordPlano, // ya validada
                                        dlg.Modelo.Nombre,
-                                       dlg.Modelo.Email,
                                        dlg.Modelo.Rol);
                     Refrescar();
                 }
@@ -154,12 +146,6 @@ namespace gp_captura_boletas
                             MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         return;
                     }
-                    if (UsuarioRepo.ExistsEmail(dlg.Modelo.Email, sel.UsuarioID))
-                    {
-                        MessageBox.Show("El correo ya está en uso.", "Validación",
-                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        return;
-                    }
 
                     // Si el seleccionado es DIRECTOR, mantener rol director (el diálogo ya lo bloquea)
                     if (sel.Rol == "DIRECTOR" && dlg.Modelo.Rol != "DIRECTOR")
@@ -170,7 +156,7 @@ namespace gp_captura_boletas
                     }
 
                     UsuarioRepo.Update(sel.UsuarioID,
-                                       dlg.Modelo.Usuario, dlg.Modelo.Nombre, dlg.Modelo.Email, dlg.Modelo.Rol,
+                                       dlg.Modelo.Usuario, dlg.Modelo.Nombre, dlg.Modelo.Rol,
                                        dlg.PasswordPlano); // null = no cambiar pass
                     Refrescar();
                 }

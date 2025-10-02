@@ -53,10 +53,17 @@ namespace gp_captura_boletas
         // Filas (paneles) para inputs; las necesitamos para hacer span al cambiar columnas
         private Panel rowUser, rowPass;
 
+        // === Logo de la escuela ===
+        private PictureBox picLogo;
+
+        // Tamaños del bloque "formulario"
+        private const int GroupWMin = 420;  // ancho mínimo del bloque (labels + inputs)
+        private const int GroupWMax = 480;  // ancho máximo del bloque (se ve corto y elegante)
+        private const int LabelColWFix = 120; // ancho fijo de la columna de etiquetas
+        private const int GapX = 12;          // separación entre label e input
+
         public FormLogin()
         {
-            
-
             // Ventana
             Text = "Iniciar sesión";
             StartPosition = FormStartPosition.CenterScreen;
@@ -72,7 +79,6 @@ namespace gp_captura_boletas
             DoubleBuffered = true;
             AutoScaleMode = AutoScaleMode.None;
 
-
             // Card (resizable)
             card = new Panel
             {
@@ -86,7 +92,7 @@ namespace gp_captura_boletas
             content = new Panel { Dock = DockStyle.None };
             card.Controls.Add(content);
 
-            // Título
+            // Título (apilado debajo del logo)
             heading = new Label
             {
                 Text = "Iniciar sesión",
@@ -98,15 +104,29 @@ namespace gp_captura_boletas
             };
             content.Controls.Add(heading);
 
+            // === Logo arriba del título, centrado ===
+            picLogo = new PictureBox
+            {
+                SizeMode = PictureBoxSizeMode.Zoom,
+                BackColor = Color.Transparent,
+                Image = Properties.Resources.escudo,
+                Height = 96,          // tamaño inicial
+                Dock = DockStyle.Top, // << apílalo arriba
+                Margin = new Padding(0, 8, 0, 6)
+            };
+            content.Controls.Add(picLogo);
+
+            // Forzar que el logo quede antes que el título
+            content.Controls.SetChildIndex(picLogo, 1);
+            content.Controls.SetChildIndex(heading, 0);
+
             // TableLayout
             tl = new TableLayoutPanel
             {
-                AutoSize = true,
+                AutoSize = false,
                 Margin = new Padding(0, 8, 0, 0),
             };
             content.Controls.Add(tl);
-            tl.Top = heading.Bottom;
-            tl.Left = 0;
 
             // Usuario
             lblUser = MakeLabel("Usuario:");
@@ -205,14 +225,13 @@ namespace gp_captura_boletas
             int contentW = Clamp(card.ClientSize.Width - card.Padding.Horizontal, 420, 620);
             content.Width = contentW;
 
+            // responsive 2→1 columnas (nos lo quedamos por si achican ventana)
             bool twoColumns = contentW >= 480;
 
-            // Re-construye SOLO si cambia el número de columnas o aún no está armado
             if (tl == null)
             {
-                tl = new TableLayoutPanel { AutoSize = true, Margin = new Padding(0, 8, 0, 0) };
+                tl = new TableLayoutPanel { AutoSize = false, Margin = new Padding(0, 8, 0, 0) };
                 content.Controls.Add(tl);
-                tl.Top = heading.Bottom;
                 BuildTable(twoColumns);
                 _isTwoColumns = twoColumns;
             }
@@ -224,24 +243,41 @@ namespace gp_captura_boletas
 
             UpdateTypography(card.Width);
 
-            // Limitar ancho del bloque y recalcular
-            int blockW = Clamp(content.Width, 520, 620);
-            tl.MaximumSize = new Size(blockW, 0);
-            tl.PerformLayout();
+            // ======= ANCHO FIJO DEL BLOQUE =======
+            int groupW = Clamp(content.Width, GroupWMin, GroupWMax);
 
-            // Centrar bloque y ajustar alturas
-            MeasureAndCenterContent();
+            // tl tiene 2 columnas: label fija + input fija (ocupamos todo el groupW)
+            tl.Width = groupW;
+            tl.Height = tl.PreferredSize.Height;
+
+            // centrar la tabla bajo el título
+            tl.Top = heading.Bottom + 12;
+            tl.Left = (content.Width - tl.Width) / 2;
+
+            // Altura de logo responsive
+            picLogo.Height = Clamp(card.Width / 7, 72, 120);
+
+            // Recalcular altos totales y centrar el "content"
+            Size pref = tl.PreferredSize;
+            int blockH = picLogo.Height + heading.Height + 12 + pref.Height;
+            content.Height = blockH;
+
+            int desiredCardH = Clamp(blockH + CardPad * 2 + 24, CardMinH, CardMaxH);
+            card.Height = Math.Min(card.Height, desiredCardH);
+
+            content.Left = (card.ClientSize.Width - content.Width) / 2;
+            content.Top = (card.ClientSize.Height - content.Height) / 2;
         }
-
 
         private void MeasureAndCenterContent()
         {
             Size pref = tl.PreferredSize;
-            int blockH = heading.Height + pref.Height + 8;
+
+            // Alto total: logo + título + espacio + tabla
+            int blockH = picLogo.Height + heading.Height + 8 + pref.Height;
 
             content.Height = blockH;
 
-            // Compactar card: no dejes hueco enorme
             int desiredCardH = Clamp(blockH + CardPad * 2 + 24, CardMinH, CardMaxH);
             card.Height = Math.Min(card.Height, desiredCardH);
 
@@ -250,14 +286,7 @@ namespace gp_captura_boletas
 
             card.Left = (ClientSize.Width - card.Width) / 2;
             card.Top = (ClientSize.Height - card.Height) / 2;
-
-            // Centrar la TLP en el content
-            int visibleW = Math.Min(tl.MaximumSize.Width, pref.Width);
-            tl.Left = (content.Width - visibleW) / 2;
-            tl.Top = heading.Bottom;
         }
-
-
 
         private void UpdateTypography(int cardWidth)    
         {
@@ -280,46 +309,53 @@ namespace gp_captura_boletas
         {
             tl.SuspendLayout();
 
-            // Quitar (sin Dispose) por si ya estaban puestos
+            // quitar controles si ya estaban
             Control[] keep = { lblUser, rowUser, lblPass, rowPass, btnEnter };
             foreach (var c in keep)
-            {
                 if (c.Parent == tl) tl.Controls.Remove(c);
-            }
 
-            // Reset de estilos (esto NO disposea controles)
             tl.ColumnStyles.Clear();
             tl.RowStyles.Clear();
             tl.ColumnCount = 0;
 
             if (twoColumns)
             {
+                // Calculamos ancho de columna de inputs para que el bloque sea corto
+                // tl.Width se asigna en Reflow -> groupW; aquí definimos las columnas fijas.
+                // InputColW = groupW - LabelColWFix (el Gap va dentro de la celda del input con padding)
                 tl.ColumnCount = 2;
-                tl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, LabelColW));
-                tl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+                tl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, LabelColWFix)); // etiquetas
+                tl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));          // inputs (se fijará por Width de tl)
 
-                // Usuario
+                // ===== FILA USUARIO =====
                 tl.RowStyles.Add(new RowStyle(SizeType.AutoSize));
                 lblUser.TextAlign = ContentAlignment.MiddleRight;
                 tl.Controls.Add(lblUser, 0, 0);
                 tl.Controls.Add(rowUser, 1, 0);
 
-                // Contraseña
+                // ===== FILA CONTRASEÑA =====
                 tl.RowStyles.Add(new RowStyle(SizeType.AutoSize));
                 lblPass.TextAlign = ContentAlignment.MiddleRight;
                 tl.Controls.Add(lblPass, 0, 1);
                 tl.Controls.Add(rowPass, 1, 1);
 
-                // Botón centrado, a lo ancho (colSpan=2)
+                // ===== BOTÓN ENTRAR (colspan=2) =====
                 tl.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-                btnEnter.Dock = DockStyle.Top;
-                btnEnter.Anchor = AnchorStyles.None;
+                btnEnter.Dock = DockStyle.None;        // ⛔️ no lo estires
+                btnEnter.Anchor = AnchorStyles.None;   // el TLP lo centrará en la celda
+                btnEnter.AutoSize = false;
+                btnEnter.Width = 180;                  // ancho compacto (ajústalo a gusto)
                 btnEnter.Margin = new Padding(0, 22, 0, 0);
                 tl.Controls.Add(btnEnter, 0, 2);
                 tl.SetColumnSpan(btnEnter, 2);
+
+                // Padding interno de celdas de inputs para separar label/input (GapX)
+                rowUser.Padding = new Padding(GapX, 0, 0, 0);
+                rowPass.Padding = new Padding(GapX, 0, 0, 0);
             }
             else
             {
+                // Versión 1 columna (por si la ventana se hace muy angosta)
                 tl.ColumnCount = 1;
                 tl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 
@@ -339,7 +375,6 @@ namespace gp_captura_boletas
 
                 tl.RowStyles.Add(new RowStyle(SizeType.AutoSize));
                 btnEnter.Dock = DockStyle.Top;
-                btnEnter.Anchor = AnchorStyles.Left | AnchorStyles.Right;
                 btnEnter.Margin = new Padding(0, 22, 0, 0);
                 tl.Controls.Add(btnEnter, 0, 4);
             }
@@ -451,22 +486,25 @@ namespace gp_captura_boletas
             TextAlign = ContentAlignment.MiddleRight,
             Margin = new Padding(0, 0, 8, 0)
         };
-
         private TextBox MakeTextBox(bool singleLine = false) => new TextBox
         {
-            Multiline = !singleLine,              // password single-line
+            Multiline = !singleLine,
             AutoSize = false,
             Height = InputH,
             BorderStyle = BorderStyle.None,
             ScrollBars = ScrollBars.None,
-            Font = new Font("Segoe UI", 11f),     // antes 12f
+            Font = new Font("Segoe UI", 11f),
             ForeColor = Color.FromArgb(30, 41, 59),
             BackColor = Color.White,
-            TextAlign = HorizontalAlignment.Center // <-- centrado horizontal
+            TextAlign = HorizontalAlignment.Center
         };
+
         private Panel WrapInput(TextBox tb)
         {
-            var row = new Panel { Height = InputH + 8, Dock = DockStyle.Top, Margin = new Padding(0, 4, 0, 8) };
+            var row = new Panel { Height = InputH + 10, Dock = DockStyle.Top, Margin = new Padding(0, 4, 0, 8) };
+
+            // inner = donde vive el textbox + underline, con el padding a la izquierda
+            var inner = new Panel { Dock = DockStyle.Fill, Padding = new Padding(GapX, 0, 0, 0) };
 
             var underline = new Panel
             {
@@ -478,14 +516,18 @@ namespace gp_captura_boletas
             tb.Dock = DockStyle.Fill;
             tb.Margin = new Padding(0);
 
-            row.Controls.Add(tb);
-            row.Controls.Add(underline);
+            inner.Controls.Add(tb);
+            inner.Controls.Add(underline);
+            row.Controls.Add(inner);
             return row;
         }
 
         private Panel WrapPassword(TextBox tb, Button eye)
         {
-            var row = new Panel { Height = InputH + 8, Dock = DockStyle.Top, Margin = new Padding(0, 4, 0, 8) };
+            var row = new Panel { Height = InputH + 10, Dock = DockStyle.Top, Margin = new Padding(0, 4, 0, 8) };
+
+            // inner con padding para que el underline y el textbox arranquen alineados
+            var inner = new Panel { Dock = DockStyle.Fill, Padding = new Padding(GapX, 0, 0, 0) };
 
             var underline = new Panel
             {
@@ -494,22 +536,23 @@ namespace gp_captura_boletas
                 Dock = DockStyle.Bottom
             };
 
+            tb.BorderStyle = BorderStyle.None;
             tb.Dock = DockStyle.Fill;
-            tb.Margin = new Padding(0, 0, eye.Width + 8, 0);  // deja espacio para el ojo
+            tb.Margin = new Padding(0, 0, 28, 0); // espacio para el ojo
 
-            eye.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            eye.Left = row.Width - eye.Width;
-            eye.Top = 0;
+            eye.FlatAppearance.BorderSize = 0;
+            eye.Width = 26;
+            eye.Dock = DockStyle.Right;
+            eye.Margin = new Padding(0);
 
-            row.Resize += (_, __) => eye.Left = row.Width - eye.Width;
+            inner.Controls.Add(tb);
+            inner.Controls.Add(eye);
+            inner.Controls.Add(underline);
 
-            row.Controls.Add(tb);
-            row.Controls.Add(eye);
-            row.Controls.Add(underline);
-            eye.BringToFront();   // que no quede tapado
-
+            row.Controls.Add(inner);
             return row;
         }
+
 
         private static int Clamp(int val, int min, int max) => Math.Max(min, Math.Min(max, val));
         private static float Clamp(float val, float min, float max)
