@@ -33,6 +33,19 @@ namespace gp_captura_boletas
         static readonly Color C_ACCENT = Color.FromArgb(121, 168, 169); // #79A8A9
         static readonly Color C_PRIMARY = Color.FromArgb(31, 78, 95);    // #1F4E5F
 
+        // ===== Reglas de negocio =====
+        private const int UsuarioMin = 5;
+        private const int UsuarioMax = 20;
+        private const int NombreMin = 3;
+        private const int SecretariasMax = 3;
+
+        // Regex: usuario solo letras y números; nombre solo letras (incluye acentos) y espacios.
+        private static readonly Regex RxUsuario = new Regex(@"^[A-Za-z0-9]+$", RegexOptions.Compiled);
+        private static readonly Regex RxNombre = new Regex(@"^[\p{L}\s]+$", RegexOptions.Compiled);
+
+        // Estado de validación en vivo
+        private bool _okUsuario, _okNombre, _okPwd, _okRol;  // _okRol = cupo de secretarias
+
         static Font Fx(float size, FontStyle style = FontStyle.Regular)
         {
             try { return new Font("Aptos", size, style); }
@@ -53,8 +66,15 @@ namespace gp_captura_boletas
             _esEdicion = (existente != null);
             _idEdicion = existente?.UsuarioID;
 
-            // ErrorProvider
-            _err = new ErrorProvider { BlinkStyle = ErrorBlinkStyle.NeverBlink, Icon = SystemIcons.Warning };
+            //Error
+            _err = new ErrorProvider
+            {
+                BlinkStyle = ErrorBlinkStyle.NeverBlink
+            };
+            // ——— Ajustes visuales personalizados ———
+
+
+
 
             // Timers de debounce (ms)
             _debounceUser = new Timer { Interval = 400 };
@@ -129,6 +149,8 @@ namespace gp_captura_boletas
             tbUsuario = MakeTextBox();
             tbNombre = MakeTextBox();
 
+
+
             cbRol = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = Color.White, ForeColor = Color.Black };
             if (!_esEdicion)
             {
@@ -154,6 +176,11 @@ namespace gp_captura_boletas
 
             tbPass = MakeTextBox(true); SetCue(tbPass, "Contraseña");
             tbPass2 = MakeTextBox(true); SetCue(tbPass2, "Confirmar contraseña");
+
+            tbUsuario.MaxLength = 20;
+            tbPass.MaxLength = 20;
+            tbPass2.MaxLength = 20;
+            tbNombre.MaxLength = 30;   // opcional
 
             // Ojos para mostrar/ocultar
             var passPanel = new Panel { Dock = DockStyle.Fill };
@@ -189,14 +216,6 @@ namespace gp_captura_boletas
             grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             grid.Controls.Add(lblUsuarioError, 1, grid.RowCount);
             grid.RowCount++;
-
-            // Limpiar avisos al teclear
-            tbUsuario.TextChanged += (_, __) =>
-            {
-                ClearUsuarioError();
-                _debounceUser.Stop();
-                _debounceUser.Start();
-            };
 
             // Carga de edición
             if (existente != null)
@@ -327,12 +346,131 @@ namespace gp_captura_boletas
             grid.SetColumnSpan(_lblPwd, 2);
             grid.RowCount++;
 
-            tbPass.TextChanged += (_, __) => ActualizarChecklistPassword();
-            tbPass2.TextChanged += (_, __) => ActualizarChecklistPassword();
+            // límites duros
+            tbUsuario.MaxLength = UsuarioMax;
+            tbPass.MaxLength = UsuarioMax;
+            tbPass2.MaxLength = UsuarioMax;
+
+            // Validación EN VIVO (ya tenías estos, los ampliamos)
+            // Reemplaza TODOS los TextChanged repetidos por este bloque único:
+            tbUsuario.TextChanged += (_, __) => {
+                ClearUsuarioError();
+                ValidarUsuarioEnVivo();
+                _debounceUser.Stop();
+                _debounceUser.Start();
+            };
+            tbNombre.TextChanged += (_, __) => { ValidarNombreEnVivo(); };
+            tbPass.TextChanged += (_, __) => { ValidarPasswordEnVivo(); ActualizarChecklistPassword(); };
+            tbPass2.TextChanged += (_, __) => { ValidarPasswordEnVivo(); ActualizarChecklistPassword(); };
+
+            // Cupo de secretarias al cambiar rol
+            cbRol.SelectedIndexChanged += async (_, __) => await ChecarCupoSecretariasAsync();
+
+            // Inicializa estado
+            _ = ChecarCupoSecretariasAsync();
+            ValidarUsuarioEnVivo();
+            ValidarNombreEnVivo();
+            ValidarPasswordEnVivo();
+            ActualizarChecklistPassword();
+            UpdateOkEnabled();
 
             tbUsuario.Leave += (_, __) => ChecarUsuarioAsync();
 
+            // 1. Reposiciona el ícono un poco más adentro (no pegado al borde)
+            _err.SetIconAlignment(tbUsuario, ErrorIconAlignment.MiddleRight);
+            _err.SetIconPadding(tbUsuario, -36); // ajusta hacia la izquierda, visible pero no pegado
+
+            _err.SetIconAlignment(tbNombre, ErrorIconAlignment.MiddleRight);
+            _err.SetIconPadding(tbNombre, -36);
+
+            _err.SetIconAlignment(cbRol, ErrorIconAlignment.MiddleRight);
+            _err.SetIconPadding(cbRol, -36);
+
+            _err.SetIconAlignment(tbPass, ErrorIconAlignment.MiddleRight);
+            _err.SetIconPadding(tbPass, -36);
+
+            _err.SetIconAlignment(tbPass2, ErrorIconAlignment.MiddleRight);
+            _err.SetIconPadding(tbPass2, -36);
+
+            // 2. Cambia el ícono por uno más pequeño (16x16)
+            _err.Icon = new Icon(SystemIcons.Information, 5, 5);
+
             ActualizarChecklistPassword(); // estado inicial correcto
+        }
+        private void ValidarUsuarioEnVivo()
+        {
+            string u = (tbUsuario.Text ?? "").Trim();
+
+            if (u.Length == 0) { LimpiarError(tbUsuario); _okUsuario = false; UpdateOkEnabled(); return; }
+
+            if (u.Length < UsuarioMin)
+            {
+                MarcarError(tbUsuario, $"Mínimo {UsuarioMin} caracteres.");
+                _okUsuario = false; UpdateOkEnabled(); return;
+            }
+            if (u.Length > UsuarioMax)
+            {
+                MarcarError(tbUsuario, $"Máximo {UsuarioMax} caracteres.");
+                _okUsuario = false; UpdateOkEnabled(); return;
+            }
+            if (!RxUsuario.IsMatch(u))
+            {
+                MarcarError(tbUsuario, "Solo letras y números (sin espacios ni caracteres especiales).");
+                _okUsuario = false; UpdateOkEnabled(); return;
+            }
+
+            // Pasa reglas locales; el check de duplicado se hace con debounce en ChecarUsuarioAsync()
+            LimpiarError(tbUsuario);
+            _okUsuario = true;
+            UpdateOkEnabled();
+        }
+
+        private void ValidarNombreEnVivo()
+        {
+            string n = (tbNombre.Text ?? "").Trim();
+
+            if (n.Length == 0) { LimpiarError(tbNombre); _okNombre = false; UpdateOkEnabled(); return; }
+
+            if (n.Length < NombreMin)
+            {
+                MarcarError(tbNombre, $"Mínimo {NombreMin} caracteres.");
+                _okNombre = false; UpdateOkEnabled(); return;
+            }
+            if (!RxNombre.IsMatch(n))
+            {
+                MarcarError(tbNombre, "Solo letras y espacios (se permiten acentos).");
+                _okNombre = false; UpdateOkEnabled(); return;
+            }
+
+            LimpiarError(tbNombre);
+            _okNombre = true;
+            UpdateOkEnabled();
+        }
+
+        private void ValidarPasswordEnVivo()
+        {
+            string p1 = tbPass.Text ?? "";
+            string p2 = tbPass2.Text ?? "";
+
+            // Solo límites rápidos aquí; la fuerza detallada ya la muestras en el checklist
+            if (p1.Length > UsuarioMax)
+                MarcarError(tbPass, $"La contraseña no puede exceder {UsuarioMax} caracteres.");
+            else
+                LimpiarError(tbPass);
+
+            if (p2.Length > UsuarioMax)
+                MarcarError(tbPass2, $"La confirmación no puede exceder {UsuarioMax} caracteres.");
+            else
+                LimpiarError(tbPass2);
+
+            // Consideramos "ok" si (en alta) cumple mínimos básicos y coincide.
+            // La verificación fuerte final se mantiene en el Click (defensa en profundidad).
+            bool enAlta = !_esEdicion;
+            bool coincide = (p1 == p2) && p1.Length > 0;
+            _okPwd = enAlta ? (p1.Length >= 8 && p1.Length <= UsuarioMax && coincide)
+                            : ((p1.Length == 0 && p2.Length == 0) || (p1.Length >= 8 && p1.Length <= UsuarioMax && coincide));
+
+            UpdateOkEnabled();
         }
 
         private void MarcarError(Control c, string msg)
@@ -378,15 +516,67 @@ namespace gp_captura_boletas
         private async void ChecarUsuarioAsync()
         {
             string u = (tbUsuario.Text ?? "").Trim();
-            if (u.Length == 0) { LimpiarError(tbUsuario); return; }
+            if (u.Length == 0) { LimpiarError(tbUsuario); _okUsuario = false; UpdateOkEnabled(); return; }
 
+            // Solo preguntamos a BD si primero pasa regex y longitudes
+            if (u.Length >= UsuarioMin && u.Length <= UsuarioMax && RxUsuario.IsMatch(u))
+            {
+                try
+                {
+                    bool existe = await System.Threading.Tasks.Task.Run(() => UsuarioRepo.ExistsUsername(u, _idEdicion));
+                    if (existe)
+                    {
+                        MarcarError(tbUsuario, "Este nombre de usuario ya está en uso.");
+                        _okUsuario = false; UpdateOkEnabled(); return;
+                    }
+                }
+                catch { /* si falla, no bloquees por aquí */ }
+            }
+
+            // Si llega aquí, pasa validaciones locales y (si consultó) no está duplicado
+            if (_err.GetError(tbUsuario) == null) _okUsuario = true;
+            UpdateOkEnabled();
+        }
+
+        private async System.Threading.Tasks.Task ChecarCupoSecretariasAsync()
+        {
             try
             {
-                bool existe = await System.Threading.Tasks.Task.Run(() => UsuarioRepo.ExistsUsername(u, _idEdicion));
-                if (existe) MarcarError(tbUsuario, "Este nombre de usuario ya está en uso.");
-                else LimpiarError(tbUsuario);
+                string rolSel = cbRol.SelectedItem as string ?? "";
+                if (rolSel.StartsWith("SECRETARIA"))
+                {
+                    int total = await System.Threading.Tasks.Task.Run(() => UsuarioRepo.CountByRole("SECRETARIA/O"));
+                    // En edición: permitir si el usuario ya era secretaria y no se está incrementando el total
+                    bool esEdicionSecretaria = _esEdicion && (cbRol.Enabled == false || rolSel.StartsWith("SECRETARIA"));
+                    if (!esEdicionSecretaria && total >= SecretariasMax)
+                    {
+                        _err.SetError(cbRol, $"Cupo lleno: máximo {SecretariasMax} secretarias/os.");
+                        _okRol = false;
+                        UpdateOkEnabled();
+                        return;
+                    }
+                }
+
+                _err.SetError(cbRol, null);
+                _okRol = true;
+                UpdateOkEnabled();
             }
-            catch {}
+            catch
+            {
+                // si falla la consulta, no bloquees el guardado por rol (pero podrías avisar)
+                _okRol = true;
+                UpdateOkEnabled();
+            }
+        }
+        private void UpdateOkEnabled()
+        {
+            // Reglas mínimas para habilitar Guardar:
+            // - Usuario válido (formato + no duplicado)
+            // - Nombre válido
+            // - Pwd válida según alta/edición (ver ValidarPasswordEnVivo)
+            // - Cupo de secretarias OK
+            bool ok = _okUsuario && _okNombre && _okPwd && _okRol;
+            btnOk.Enabled = ok;
         }
         private void AddRowToGrid(TableLayoutPanel grid, string label, Control ctl)
         {
@@ -462,12 +652,14 @@ namespace gp_captura_boletas
         {
             if (p == null) p = "";
             if (p.Length < 8) { mensaje = "mínimo 8 caracteres."; return false; }
+            if (p.Length > UsuarioMax) { mensaje = $"máximo {UsuarioMax} caracteres."; return false; }
             if (!Regex.IsMatch(p, "[A-Z]")) { mensaje = "debe tener al menos una mayúscula."; return false; }
             if (!Regex.IsMatch(p, "[a-z]")) { mensaje = "debe tener al menos una minúscula."; return false; }
             if (!Regex.IsMatch(p, "[0-9]")) { mensaje = "debe tener al menos un número."; return false; }
             if (!Regex.IsMatch(p, "[^A-Za-z0-9]")) { mensaje = "debe tener al menos un carácter especial."; return false; }
             mensaje = null; return true;
         }
+
 
         // Cue banner nativo
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]

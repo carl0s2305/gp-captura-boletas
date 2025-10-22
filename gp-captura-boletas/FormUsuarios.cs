@@ -5,17 +5,160 @@ using System.Windows.Forms;
 
 namespace gp_captura_boletas
 {
+    sealed class UserCard : Panel
+    {
+        public UsuarioDto Data { get; }
+        public event Action<UserCard> OnSelected;
+        public event Action<UserCard> OnOpen;
+
+        private Label lblNombre, lblUsuario, lblRol;
+        private Panel badge;
+        private bool _selected;
+
+        // Estilo
+        private static readonly Color CBorder = Color.FromArgb(220, 225, 230);
+        private static readonly Color CHover = Color.FromArgb(248, 251, 252);
+        private static readonly Color CSel = Color.FromArgb(170, 207, 208);
+        private static readonly Color CCard = Color.White;
+        private static readonly Color CRol = Color.FromArgb(31, 78, 95);
+
+        public bool IsSelected
+        {
+            get => _selected;
+            set { _selected = value; Invalidate(); }
+        }
+
+        public UserCard(UsuarioDto data)
+        {
+            DoubleBuffered = true;
+            Data = data;
+
+            Width = 280;
+            Height = 120;
+            BackColor = CCard;
+            Cursor = Cursors.Hand;
+
+            Padding = new Padding(12, 10, 12, 10);
+            Margin = new Padding(10);
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                     ControlStyles.OptimizedDoubleBuffer, true);
+
+            // ===== Contenido centrado en columna =====
+            var host = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 3,
+                BackColor = Color.Transparent
+            };
+            host.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            host.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // nombre
+            host.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // usuario
+            host.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // badge
+            Controls.Add(host);
+
+            // Nombre (centrado y en negritas)
+            lblNombre = new Label
+            {
+                AutoSize = false,
+                Dock = DockStyle.Top,
+                Height = 28,
+                Text = string.IsNullOrWhiteSpace(data.Nombre) ? "(Sin nombre)" : data.Nombre,
+                Font = new Font("Aptos", 11f, FontStyle.Bold),
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+            host.Controls.Add(lblNombre, 0, 0);
+
+            // Usuario (centrado) — “nombre del user”
+            lblUsuario = new Label
+            {
+                AutoSize = false,
+                Dock = DockStyle.Top,
+                Height = 22,
+                Text = "Usuario: " + data.Usuario,   // aquí está el "nombre de user"
+                ForeColor = Color.FromArgb(70, 70, 70),
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+            host.Controls.Add(lblUsuario, 0, 1);
+
+            // Badge Rol (centrado)
+            badge = new Panel
+            {
+                Height = 26,
+                Width = 140,
+                BackColor = Color.FromArgb(235, 241, 243),
+                Margin = new Padding(0, 6, 0, 0)
+            };
+            lblRol = new Label
+            {
+                AutoSize = true,
+                Text = data.Rol,
+                ForeColor = CRol,
+                Font = new Font("Aptos", 9.5f, FontStyle.Bold),
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+            // Centramos el label dentro del badge usando un FlowLayout
+            var badgeFlow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                AutoSize = false,
+                Margin = Padding.Empty,
+                Padding = new Padding(8, 4, 8, 4)
+            };
+            badgeFlow.Controls.Add(lblRol);
+            badge.Controls.Add(badgeFlow);
+
+            // Contenedor para centrar el badge horizontalmente
+            var badgeHost = new Panel { Dock = DockStyle.Top, Height = badge.Height + 8 };
+            badge.Parent = badgeHost;
+            badgeHost.Controls.Add(badge);
+            badge.Anchor = AnchorStyles.Top;
+            // centrado dinámico
+            badgeHost.Resize += (_, __) => badge.Left = (badgeHost.ClientSize.Width - badge.Width) / 2;
+
+            host.Controls.Add(badgeHost, 0, 2);
+
+            // ===== Eventos (click en TODO el panel) =====
+            WireClicksRecursive(this);       // <- esto asegura click en cualquier zona
+            MouseEnter += (_, __) => { if (!IsSelected) { BackColor = CHover; Invalidate(); } };
+            MouseLeave += (_, __) => { if (!IsSelected) { BackColor = CCard; Invalidate(); } };
+        }
+
+        // Engancha Click / DoubleClick a todos los hijos recursivamente
+        private void WireClicksRecursive(Control root)
+        {
+            root.Click += (_, __) => OnSelected?.Invoke(this);
+            root.DoubleClick += (_, __) => OnOpen?.Invoke(this);
+            foreach (Control c in root.Controls)
+                WireClicksRecursive(c);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            using var pen = new Pen(IsSelected ? CSel : CBorder, IsSelected ? 2f : 1f);
+            var r = ClientRectangle; r.Width -= 1; r.Height -= 1;
+            g.DrawRectangle(pen, r);
+        }
+    }
     public partial class FormUsuarios : Form
     {
-        private DataGridView grid;
+        private FlowLayoutPanel cards;
         private BindingSource bs;
         private Button btnAdd, btnEdit, btnDel;
+
+        private UserCard selectedCard;
 
         public FormUsuarios()
         {
             Text = "Administrar Usuarios";
             StartPosition = FormStartPosition.CenterParent;
-            MinimumSize = new Size(820, 520);
+            MinimumSize = new Size(890, 520);
             AutoScaleMode = AutoScaleMode.Dpi;
             DoubleBuffered = true;
 
@@ -80,56 +223,33 @@ namespace gp_captura_boletas
             btnDel = new Button { Text = "🗑️  Eliminar Usuario", Width = 180, Height = 36 };
             left.Controls.AddRange(new Control[] { btnAdd, btnEdit, btnDel });
 
-            // Centro
-            grid = new DataGridView
+
+
+            // Centro: contenedor de tarjetas
+            cards = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                ReadOnly = true,
-                MultiSelect = false,
-                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-                AutoGenerateColumns = false,
-                AllowUserToAddRows = false,
-                AllowUserToDeleteRows = false,
-                RowHeadersVisible = false,
-
-                BackgroundColor = Color.White,
-                BorderStyle = BorderStyle.None,
-                CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal,
-                GridColor = Color.FromArgb(230, 230, 230),
-                EnableHeadersVisualStyles = false
+                AutoScroll = true,
+                WrapContents = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                BackColor = Color.White,
+                Padding = new Padding(16),
+                Margin = Padding.Empty
             };
-            grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(31, 78, 95);
-            grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-            grid.ColumnHeadersDefaultCellStyle.Font = new Font("Aptos", 10f, FontStyle.Bold);
-            grid.DefaultCellStyle.BackColor = Color.White;
-            grid.DefaultCellStyle.ForeColor = Color.FromArgb(30, 30, 30);
-            grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(170, 207, 208);
-            grid.DefaultCellStyle.SelectionForeColor = Color.FromArgb(30, 30, 30);
-            grid.ColumnHeadersHeight = 34;
-            grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-
-            root.Controls.Add(grid, 1, 0);
-
-            // Columnas
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "UsuarioID", HeaderText = "ID", Width = 60 });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Usuario", HeaderText = "Usuario", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, FillWeight = 30 });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Nombre", HeaderText = "Nombre", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, FillWeight = 45 });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Rol", HeaderText = "Rol", Width = 110 });
+            root.Controls.Add(cards, 1, 0);
 
             bs = new BindingSource();
-            grid.DataSource = bs;
 
             Load += (_, __) => Refrescar();
             btnAdd.Click += (_, __) => Agregar();
             btnEdit.Click += (_, __) => ModificarSeleccionado();
             btnDel.Click += (_, __) => EliminarSeleccionado();
-            grid.CellDoubleClick += (_, __) => ModificarSeleccionado();
         }
 
         private UsuarioDto Seleccionado()
         {
-            return bs.Current as UsuarioDto;
-        } 
+            return selectedCard?.Data;
+        }
 
         private void Refrescar()
         {
@@ -142,6 +262,32 @@ namespace gp_captura_boletas
                 return;
             }
             bs.DataSource = data;
+            RenderCards(data);
+        }
+
+        private void RenderCards(IEnumerable<UsuarioDto> data)
+        {
+            cards.SuspendLayout();
+            cards.Controls.Clear();
+            selectedCard = null;
+
+            foreach (var u in data)
+            {
+                var card = new UserCard(u);
+                card.Margin = new Padding(10);
+                card.OnSelected += c =>
+                {
+                    // limpiar selección previa
+                    if (selectedCard != null && selectedCard != c)
+                        selectedCard.IsSelected = false;
+                    selectedCard = c;
+                    selectedCard.IsSelected = true;
+                };
+                card.OnOpen += _ => ModificarSeleccionado();  // doble click
+                cards.Controls.Add(card);
+            }
+
+            cards.ResumeLayout(true);
         }
 
         private void Agregar()

@@ -18,7 +18,7 @@ namespace gp_captura_boletas
         // SesionApp.cs
         public static string ConnStr => ConfigurationManager.ConnectionStrings["LocalSql"].ConnectionString;
 
-        // 👉 Inicia sesión validando en la BD
+        // Inicia sesión validando en la BD
         public static bool IniciarSesion(string usuario, string password)
         {
             try

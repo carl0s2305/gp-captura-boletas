@@ -40,7 +40,19 @@ WHERE Usuario = @u AND (@id IS NULL OR UsuarioID <> @id);", cn);
             var x = cmd.ExecuteScalar();
             return x != null;
         }
-
+        public static int CountByRole(string rol)
+        {
+            using (var conn = new SqlConnection(SesionApp.ConnStr))
+            {
+                conn.Open();
+                string sql = "SELECT COUNT(*) FROM usuario WHERE rol = @rol";
+                using (var cmd = new SqlCommand(sql, conn))
+                {
+                    cmd.Parameters.AddWithValue("@rol", rol);
+                    return (int)cmd.ExecuteScalar();
+                }
+            }
+        }
         public static int CountDirectors()
         {
             using var cn = new SqlConnection(SesionApp.ConnStr);

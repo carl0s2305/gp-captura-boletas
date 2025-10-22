@@ -138,6 +138,10 @@ namespace gp_captura_boletas
             tbPass = MakeTextBox(singleLine: true);   // single-line para que funcione password
             tbPass.UseSystemPasswordChar = true;       // oculta al iniciar
 
+            // === LÍMITE DE CARACTERES ===
+            tbUser.MaxLength = 20;
+            tbPass.MaxLength = 20;
+
             btnEye = new Button
             {
                 Text = "👁",
@@ -207,6 +211,18 @@ namespace gp_captura_boletas
                 intentosRestantes = MaxIntentos;
                 btnEnter.Enabled = true;
             };
+            tbUser.KeyPress += (s, e) =>
+            {
+                if (tbUser.TextLength >= 20 && !char.IsControl(e.KeyChar))
+                    e.Handled = true;
+            };
+
+            tbPass.KeyPress += (s, e) =>
+            {
+                if (tbPass.TextLength >= 20 && !char.IsControl(e.KeyChar))
+                    e.Handled = true;
+            };
+
         }
 
 

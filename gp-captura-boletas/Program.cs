@@ -1,4 +1,5 @@
 ﻿using Microsoft.Win32;
+using PdfSharp.Fonts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,6 +16,9 @@ namespace gp_captura_boletas
         [STAThread]
         static void Main()
         {
+            if (GlobalFontSettings.FontResolver is null)
+                GlobalFontSettings.FontResolver = new AppFontResolver();
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             // App cerrando normal
